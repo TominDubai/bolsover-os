@@ -1,98 +1,8 @@
 import { Header } from '@/components/layout/Header'
 import Link from 'next/link'
 import { Plus, Search, Filter } from 'lucide-react'
-import { STATUS_LABELS, STATUS_COLORS, HEALTH_ICONS } from '@/types'
-
-// Placeholder data
-const projects = [
-  {
-    id: '1',
-    reference: 'BOL-2026-047',
-    name: 'Marina Vista Villa',
-    client: 'Mr Ahmed Al Maktoum',
-    status: 'boq_review' as const,
-    health: null,
-    value: 450000,
-    pm: null,
-  },
-  {
-    id: '2',
-    reference: 'BOL-2026-042',
-    name: 'Al Barsha Villa',
-    client: 'Mr & Mrs Johnson',
-    status: 'active' as const,
-    health: 'on_track' as const,
-    value: 380000,
-    pm: 'Rosano',
-    progress: 75,
-  },
-  {
-    id: '3',
-    reference: 'BOL-2026-039',
-    name: 'Springs Renovation',
-    client: 'Sarah Williams',
-    status: 'active' as const,
-    health: 'on_track' as const,
-    value: 220000,
-    pm: 'Rosano',
-    progress: 60,
-  },
-  {
-    id: '4',
-    reference: 'BOL-2026-038',
-    name: 'Downtown Penthouse',
-    client: 'James Chen',
-    status: 'active' as const,
-    health: 'minor_delay' as const,
-    value: 890000,
-    pm: 'Rosano',
-    progress: 45,
-    delay: -3,
-  },
-  {
-    id: '5',
-    reference: 'BOL-2026-044',
-    name: 'Emirates Hills Villa',
-    client: 'Mohammed Al Rashid',
-    status: 'approval_pending' as const,
-    health: 'blocked' as const,
-    value: 1200000,
-    pm: null,
-  },
-  {
-    id: '6',
-    reference: 'BOL-2026-041',
-    name: 'Jumeirah Fit-out',
-    client: 'Dubai Properties LLC',
-    status: 'active' as const,
-    health: 'on_track' as const,
-    value: 175000,
-    pm: 'Rosano',
-    progress: 40,
-  },
-  {
-    id: '7',
-    reference: 'BOL-2026-045',
-    name: 'Palm Penthouse',
-    client: 'Victoria Sterling',
-    status: 'quoted' as const,
-    health: null,
-    value: 2100000,
-    pm: null,
-  },
-  {
-    id: '8',
-    reference: 'BOL-2026-048',
-    name: 'DIFC Office',
-    client: 'Sterling Investments',
-    status: 'site_visit_scheduled' as const,
-    health: null,
-    value: 95000,
-    pm: null,
-  },
-]
-
-const filters = ['All', 'Active', 'Pipeline', 'Snagging', 'Complete', 'On Hold']
+import { STATUS_LABELS, STATUS_COLORS, HEALTH_ICONS, type ProjectStatus, type ProjectHealth } from '@/types'
+import { createClient } from '@/lib/supabase/server'
 
 function formatCurrency(amount: number) {
   if (amount >= 1000000) {
@@ -101,7 +11,23 @@ function formatCurrency(amount: number) {
   return `AED ${(amount / 1000).toFixed(0)}K`
 }
 
-export default function ProjectsPage() {
+const filters = ['All', 'Active', 'Pipeline', 'Snagging', 'Complete', 'On Hold']
+
+export default async function ProjectsPage() {
+  const supabase = await createClient()
+  
+  const { data: projects, error } = await supabase
+    .from('projects')
+    .select(`
+      *,
+      client:clients(name)
+    `)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching projects:', error)
+  }
+
   return (
     <div className="min-h-screen">
       <Header 
@@ -165,59 +91,53 @@ export default function ProjectsPage() {
                   Value
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  PM
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                   Health
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {projects.map((project) => (
-                <tr 
-                  key={project.id} 
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
-                >
-                  <td className="px-6 py-4">
-                    <Link href={`/projects/${project.id}`} className="block">
-                      <p className="font-medium text-gray-900">{project.name}</p>
-                      <p className="text-sm text-gray-500">{project.client}</p>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[project.status]}`}>
-                      {STATUS_LABELS[project.status]}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-medium text-gray-900">
-                    {formatCurrency(project.value)}
-                  </td>
-                  <td className="px-6 py-4 text-gray-500">
-                    {project.pm || '—'}
-                  </td>
-                  <td className="px-6 py-4">
-                    {project.health ? (
-                      <div className="flex items-center gap-2">
-                        <span>{HEALTH_ICONS[project.health]}</span>
-                        {project.progress !== undefined && (
-                          <span className="text-sm text-gray-600">{project.progress}%</span>
-                        )}
-                        {project.delay && (
-                          <span className="text-sm text-red-600">{project.delay}d</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
+              {projects && projects.length > 0 ? (
+                projects.map((project) => (
+                  <tr 
+                    key={project.id} 
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <td className="px-6 py-4">
+                      <Link href={`/projects/${project.id}`} className="block">
+                        <p className="font-medium text-gray-900">{project.reference || 'No reference'}</p>
+                        <p className="text-sm text-gray-500">{project.client?.name || 'No client'}</p>
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[project.status as ProjectStatus] || 'bg-gray-100 text-gray-800'}`}>
+                        {STATUS_LABELS[project.status as ProjectStatus] || project.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-medium text-gray-900">
+                      {project.contract_value ? formatCurrency(project.contract_value) : '—'}
+                    </td>
+                    <td className="px-6 py-4">
+                      {project.health ? (
+                        <span>{HEALTH_ICONS[project.health as ProjectHealth]}</span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                    No projects found. Create your first project!
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
 
         <div className="mt-4 text-sm text-gray-500">
-          Showing {projects.length} projects
+          Showing {projects?.length || 0} projects
         </div>
       </div>
     </div>
