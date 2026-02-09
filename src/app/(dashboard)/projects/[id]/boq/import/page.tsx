@@ -190,6 +190,8 @@ export default function BOQImportPage() {
       const sheetName = workbook.SheetNames[0]
       const worksheet = workbook.Sheets[sheetName]
       
+      console.log('📊 Sheet names:', workbook.SheetNames)
+      
       // First try smart parsing
       const rawData = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, { 
         header: 1,
@@ -197,9 +199,19 @@ export default function BOQImportPage() {
         raw: true 
       })
       
+      console.log('📊 Raw data rows:', rawData.length)
+      console.log('📊 First 5 rows:', rawData.slice(0, 5))
+      console.log('📊 Rows 20-30:', rawData.slice(20, 30))
+      
       const { items, categories: cats } = smartParseBOQ(rawData)
       
-      if (items.length > 5) {
+      console.log('📊 Smart parse result:', items.length, 'items,', cats.length, 'categories')
+      console.log('📊 Categories:', cats)
+      if (items.length > 0) {
+        console.log('📊 First 3 items:', items.slice(0, 3))
+      }
+      
+      if (items.length > 0) {
         // Smart parsing worked!
         setParsedItems(items)
         setCategories(cats)
