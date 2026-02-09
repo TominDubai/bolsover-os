@@ -399,6 +399,21 @@ export default function BOQImportPage() {
                 )
               }
 
+              const calcCost = item.quantity * item.supplierUnitCost
+              const calcPrice = item.total || item.quantity * item.unitPrice
+              
+              // Debug first item
+              if (idx === 0) {
+                console.log('📊 First item values:', {
+                  code: item.itemCode,
+                  qty: item.quantity,
+                  supplierUnitCost: item.supplierUnitCost,
+                  total: item.total,
+                  calcCost,
+                  calcPrice,
+                })
+              }
+
               return {
                 boq_id: boq.id,
                 category_id: category.id,
@@ -407,8 +422,8 @@ export default function BOQImportPage() {
                 quantity: item.quantity,
                 unit: item.unit,
                 unit_cost: item.supplierUnitCost,
-                cost: item.quantity * item.supplierUnitCost,
-                price: item.total || item.quantity * item.unitPrice,
+                cost: calcCost,
+                price: calcPrice,
                 is_inhouse: false,
                 sort_order: itemOrder++,
                 image_url: imageUrl,
