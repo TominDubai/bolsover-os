@@ -12,7 +12,8 @@ import {
   Settings,
   HardHat,
   ClipboardList,
-  Bell
+  Bell,
+  X
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -28,15 +29,29 @@ const secondaryNavigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  onClose?: () => void
+}
+
+export function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname()
 
   return (
     <div className="flex h-full w-64 flex-col bg-gray-900">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2 px-6">
-        <Building2 className="h-8 w-8 text-blue-500" />
-        <span className="text-xl font-bold text-white">Bolsover OS</span>
+      <div className="flex h-16 items-center justify-between px-6">
+        <div className="flex items-center gap-2">
+          <Building2 className="h-8 w-8 text-blue-500" />
+          <span className="text-xl font-bold text-white">Bolsover OS</span>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-800 hover:text-white lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -47,6 +62,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={onClose}
               className={cn(
                 'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
