@@ -142,16 +142,21 @@ export default function BOQImportPage() {
         }
       }
       
-      // Stop at Grand Total - everything after is terms & conditions
+      // Stop at Grand Total or Summary section - everything after is totals/terms
       const lowerFirst = firstCell.toLowerCase()
-      if (lowerFirst.includes('grand total')) {
-        console.log('📊 Reached Grand Total at row', i + 1, '- stopping parse')
+      if (lowerFirst.includes('grand total') || lowerFirst === 'summary' || lowerFirst === 'total') {
+        console.log('📊 Reached', firstCell, 'at row', i + 1, '- stopping parse')
         break
       }
       
       // Skip sub-total and total rows
       if (lowerFirst.includes('sub-total') || lowerFirst.includes('subtotal') || 
           lowerFirst.includes('total of')) {
+        continue
+      }
+      
+      // Skip summary category letters (single letters A-H without period)
+      if (/^[A-H]$/.test(firstCell)) {
         continue
       }
       
