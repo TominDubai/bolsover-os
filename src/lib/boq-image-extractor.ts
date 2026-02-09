@@ -43,7 +43,13 @@ export async function extractImagesFromExcel(file: File): Promise<Map<number, Bl
     const imageFile = zip.file(`xl/${imagePath}`)
     if (!imageFile) continue
     
-    const imageBlob = await imageFile.async('blob')
+    // Get the raw data and create blob with correct MIME type
+    const imageData = await imageFile.async('arraybuffer')
+    const ext = imagePath.split('.').pop()?.toLowerCase() || 'png'
+    const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 
+                     ext === 'gif' ? 'image/gif' : 'image/png'
+    
+    const imageBlob = new Blob([imageData], { type: mimeType })
     rowToImage.set(row, imageBlob)
   }
   
@@ -127,16 +133,19 @@ export async function uploadImageToStorage(
   itemIndex: number
 ): Promise<string | null> {
   try {
-    // Determine file extension from blob type
-    const ext = imageBlob.type.includes('png') ? 'png' : 
-                imageBlob.type.includes('jpeg') || imageBlob.type.includes('jpg') ? 'jpg' : 'png'
+    // Determine file extension and content type from blob
+    const contentType = imageBlob.type || 'image/png'
+    const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 
+                contentType.includes('gif') ? 'gif' : 'png'
     
     const fileName = `${projectId}/${Date.now()}-${itemIndex}.${ext}`
+    
+    console.log(`📸 Uploading ${fileName} as ${contentType}`)
     
     const { data, error } = await supabase.storage
       .from('boq-images')
       .upload(fileName, imageBlob, {
-        contentType: imageBlob.type || 'image/png',
+        contentType: contentType,
         upsert: false
       })
     
