@@ -191,9 +191,15 @@ export default function BOQImportPage() {
       
       // Skip if no description or no price data
       if (!description || description.length < 3) continue
-      if (unitPrice === 0 && total === 0 && String(row[8]).toLowerCase().includes('optional')) {
-        // Optional items - still include them with rate only
-      } else if (unitPrice === 0 && total === 0) {
+      
+      // Skip optional/descoped items (col I contains text like "Optional: Rate Only" or "Descoped")
+      const colIRaw = String(row[8] || '').toLowerCase()
+      if (colIRaw.includes('optional') || colIRaw.includes('descoped')) {
+        console.log('📊 Skipping optional/descoped item at row', i + 1, ':', firstCell)
+        continue
+      }
+      
+      if (unitPrice === 0 && total === 0) {
         continue
       }
       
