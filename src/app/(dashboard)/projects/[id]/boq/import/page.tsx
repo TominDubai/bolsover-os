@@ -142,10 +142,16 @@ export default function BOQImportPage() {
         }
       }
       
-      // Skip sub-total and total rows
+      // Stop at Grand Total - everything after is terms & conditions
       const lowerFirst = firstCell.toLowerCase()
+      if (lowerFirst.includes('grand total')) {
+        console.log('📊 Reached Grand Total at row', i + 1, '- stopping parse')
+        break
+      }
+      
+      // Skip sub-total and total rows
       if (lowerFirst.includes('sub-total') || lowerFirst.includes('subtotal') || 
-          lowerFirst.includes('total of') || lowerFirst.includes('grand total')) {
+          lowerFirst.includes('total of')) {
         continue
       }
       
