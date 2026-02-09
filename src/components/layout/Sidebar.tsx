@@ -20,10 +20,8 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
   { name: 'Enquiries', href: '/enquiries', icon: ClipboardList },
-  { name: 'Schedule', href: '/schedule', icon: Calendar },
   { name: 'Clients', href: '/clients', icon: Users },
   { name: 'Subcontractors', href: '/subcontractors', icon: HardHat },
-  { name: 'Reports', href: '/reports', icon: FileText },
 ]
 
 const secondaryNavigation = [

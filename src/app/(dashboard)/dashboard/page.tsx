@@ -1,213 +1,266 @@
 import { Header } from '@/components/layout/Header'
+import { createClient } from '@/lib/supabase/server'
 import { 
   TrendingUp, 
   FolderKanban, 
   DollarSign, 
-  AlertCircle,
+  AlertTriangle,
   Clock,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  FileText,
+  Calendar,
+  Users
 } from 'lucide-react'
 import Link from 'next/link'
+import { STATUS_LABELS, STATUS_COLORS, type ProjectStatus } from '@/types'
 
-// Placeholder data - will come from Supabase
-const stats = [
-  { 
-    name: 'Pipeline', 
-    value: 'AED 2.4M', 
-    subtext: '12 enquiries',
-    icon: TrendingUp,
-    color: 'bg-blue-500'
-  },
-  { 
-    name: 'Active Projects', 
-    value: '8', 
-    subtext: 'AED 4.1M total',
-    icon: FolderKanban,
-    color: 'bg-green-500'
-  },
-  { 
-    name: 'This Month', 
-    value: 'AED 890K', 
-    subtext: 'revenue',
-    icon: DollarSign,
-    color: 'bg-purple-500'
-  },
-]
+const PIPELINE_STATUSES = ['enquiry', 'qualifying', 'awaiting_design', 'ready_for_visit', 'site_visit_scheduled', 'visited', 'boq_in_progress', 'boq_review', 'quoted']
+const ACTIVE_STATUSES = ['accepted', 'contract_sent', 'contract_signed', 'deposit_pending', 'deposit_paid', 'approval_pending', 'scheduling', 'scheduled', 'active', 'snagging']
 
-const needsAttention = [
-  {
-    id: '1',
-    type: 'boq_approval',
-    title: 'BOQ Approval',
-    project: 'Marina Vista Villa',
-    value: 'AED 450,000',
-    time: '2 hours ago',
-  },
-  {
-    id: '2',
-    type: 'variation',
-    title: 'Variation Approval',
-    project: 'Palm Jumeirah Penthouse',
-    value: 'AED 28,500',
-    time: 'Kitchen island upgrade',
-  },
-  {
-    id: '3',
-    type: 'payment',
-    title: 'Payment Overdue',
-    project: 'JBR Apartment',
-    value: 'AED 125,000',
-    time: '5 days overdue',
-  },
-]
+export default async function DashboardPage() {
+  const supabase = await createClient()
 
-const watchList = [
-  { project: 'Downtown Penthouse', issue: 'Schedule slipping (3 days)', status: 'warning' },
-  { project: 'Emirates Hills Villa', issue: 'Approval delayed', status: 'warning' },
-]
+  // Fetch all data in parallel
+  const [
+    { data: projects },
+    { data: variations },
+    { data: recentActivity },
+    { count: pendingBoqCount },
+  ] = await Promise.all([
+    supabase.from('projects').select('*'),
+    supabase.from('variations').select('*, project:projects(reference)').eq('payment_status', 'pending').neq('status', 'rejected'),
+    supabase.from('activity_log').select('*, project:projects(reference), user:users(name)').order('created_at', { ascending: false }).limit(10),
+    supabase.from('boq').select('*', { count: 'exact', head: true }).eq('status', 'pending_approval'),
+  ])
 
-const onTrack = [
-  { project: 'Al Barsha Villa', progress: 75 },
-  { project: 'Springs Renovation', progress: 60 },
-  { project: 'Jumeirah Fit-out', progress: 40 },
-]
+  // Calculate stats
+  const pipelineProjects = projects?.filter(p => PIPELINE_STATUSES.includes(p.status)) || []
+  const activeProjects = projects?.filter(p => ACTIVE_STATUSES.includes(p.status)) || []
+  const completedProjects = projects?.filter(p => p.status === 'complete') || []
 
-export default function DashboardPage() {
+  const pipelineValue = pipelineProjects.reduce((sum, p) => sum + (p.contract_value || 0), 0)
+  const activeValue = activeProjects.reduce((sum, p) => sum + (p.contract_value || 0), 0)
+  const unpaidVariations = variations?.filter(v => v.payment_status === 'pending') || []
+  const unpaidVariationValue = unpaidVariations.reduce((sum, v) => sum + (v.price || 0), 0)
+
+  const formatCurrency = (amount: number) => {
+    if (amount >= 1000000) {
+      return `AED ${(amount / 1000000).toFixed(1)}M`
+    }
+    if (amount >= 1000) {
+      return `AED ${(amount / 1000).toFixed(0)}K`
+    }
+    return `AED ${amount}`
+  }
+
+  const formatDate = (date: string) => {
+    const d = new Date(date)
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  }
+
   return (
     <div className="min-h-screen">
       <Header 
         title="Dashboard" 
-        subtitle="Good afternoon, Tom"
+        subtitle={`${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`}
       />
       
       <div className="p-6 space-y-6">
-        {/* Stats */}
-        <div className="grid gap-4 md:grid-cols-3">
-          {stats.map((stat) => (
-            <div
-              key={stat.name}
-              className="rounded-xl bg-white p-6 shadow-sm border border-gray-100"
-            >
-              <div className="flex items-center gap-4">
-                <div className={`rounded-lg ${stat.color} p-3`}>
-                  <stat.icon className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">{stat.name}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-sm text-gray-500">{stat.subtext}</p>
-                </div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Pipeline</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(pipelineValue)}</p>
+                <p className="text-sm text-gray-500 mt-1">{pipelineProjects.length} enquiries</p>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Needs Attention */}
-        <div className="rounded-xl bg-white shadow-sm border border-gray-100">
-          <div className="border-b border-gray-100 px-6 py-4">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-red-500" />
-              <h2 className="font-semibold text-gray-900">Needs Your Attention</h2>
-              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                {needsAttention.length}
-              </span>
+              <div className="p-3 rounded-xl bg-blue-100">
+                <TrendingUp className="h-6 w-6 text-blue-600" />
+              </div>
             </div>
           </div>
-          <div className="divide-y divide-gray-100">
-            {needsAttention.map((item) => (
-              <div key={item.id} className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-4">
-                  <AlertCircle className="h-5 w-5 text-red-500" />
-                  <div>
-                    <p className="font-medium text-gray-900">{item.title}</p>
-                    <p className="text-sm text-gray-500">{item.project}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="font-medium text-gray-900">{item.value}</p>
-                    <p className="text-sm text-gray-500">{item.time}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
-                      View
-                    </button>
-                  </div>
-                </div>
+
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Active Projects</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{activeProjects.length}</p>
+                <p className="text-sm text-gray-500 mt-1">{formatCurrency(activeValue)} value</p>
               </div>
-            ))}
+              <div className="p-3 rounded-xl bg-green-100">
+                <FolderKanban className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Completed</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{completedProjects.length}</p>
+                <p className="text-sm text-gray-500 mt-1">all time</p>
+              </div>
+              <div className="p-3 rounded-xl bg-purple-100">
+                <CheckCircle2 className="h-6 w-6 text-purple-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Unpaid Variations</p>
+                <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(unpaidVariationValue)}</p>
+                <p className="text-sm text-gray-500 mt-1">{unpaidVariations.length} pending</p>
+              </div>
+              <div className="p-3 rounded-xl bg-amber-100">
+                <DollarSign className="h-6 w-6 text-amber-600" />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Two columns */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Watching */}
-          <div className="rounded-xl bg-white shadow-sm border border-gray-100">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-yellow-500" />
-                <h2 className="font-semibold text-gray-900">Watching</h2>
-                <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-                  {watchList.length}
-                </span>
-              </div>
+        <div className="grid grid-cols-3 gap-6">
+          {/* Needs Attention */}
+          <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Needs Attention</h2>
             </div>
+            
             <div className="divide-y divide-gray-100">
-              {watchList.map((item, i) => (
-                <div key={i} className="flex items-center justify-between px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <Clock className="h-5 w-5 text-yellow-500" />
+              {/* Pending BOQ Approvals */}
+              {(pendingBoqCount || 0) > 0 && (
+                <Link href="/projects?filter=boq_pending" className="flex items-center justify-between p-4 hover:bg-gray-50">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 rounded-lg bg-purple-100">
+                      <FileText className="h-5 w-5 text-purple-600" />
+                    </div>
                     <div>
-                      <p className="font-medium text-gray-900">{item.project}</p>
-                      <p className="text-sm text-gray-500">{item.issue}</p>
+                      <p className="font-medium text-gray-900">BOQ Approvals Pending</p>
+                      <p className="text-sm text-gray-500">{pendingBoqCount} BOQs awaiting approval</p>
                     </div>
                   </div>
                   <ArrowRight className="h-5 w-5 text-gray-400" />
-                </div>
+                </Link>
+              )}
+
+              {/* Unpaid Variations */}
+              {unpaidVariations.slice(0, 3).map((variation) => (
+                <Link 
+                  key={variation.id} 
+                  href={`/projects/${variation.project_id}/variations/${variation.id}`}
+                  className="flex items-center justify-between p-4 hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 rounded-lg bg-amber-100">
+                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {variation.reference} - Awaiting Payment
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {variation.project?.reference} · {formatCurrency(variation.price || 0)}
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-gray-400" />
+                </Link>
               ))}
+
+              {(pendingBoqCount || 0) === 0 && unpaidVariations.length === 0 && (
+                <div className="p-8 text-center text-gray-500">
+                  <CheckCircle2 className="h-12 w-12 text-green-300 mx-auto mb-3" />
+                  <p className="font-medium text-gray-900">All caught up!</p>
+                  <p className="text-sm">Nothing needs your attention right now</p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* On Track */}
-          <div className="rounded-xl bg-white shadow-sm border border-gray-100">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-green-500" />
-                  <h2 className="font-semibold text-gray-900">On Track</h2>
-                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                    {onTrack.length}
-                  </span>
-                </div>
-                <Link 
-                  href="/projects" 
-                  className="text-sm font-medium text-blue-600 hover:text-blue-700"
-                >
-                  View all →
-                </Link>
-              </div>
+          {/* Recent Activity */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-900">Recent Activity</h2>
             </div>
-            <div className="divide-y divide-gray-100">
-              {onTrack.map((item, i) => (
-                <div key={i} className="px-6 py-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      <p className="font-medium text-gray-900">{item.project}</p>
+            
+            <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+              {recentActivity && recentActivity.length > 0 ? (
+                recentActivity.map((activity) => (
+                  <div key={activity.id} className="p-4">
+                    <p className="text-sm text-gray-900">{activity.description || activity.action}</p>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                      {activity.project?.reference && (
+                        <span>{activity.project.reference}</span>
+                      )}
+                      <span>·</span>
+                      <span>{formatDate(activity.created_at)}</span>
                     </div>
-                    <span className="text-sm font-medium text-gray-900">{item.progress}%</span>
                   </div>
-                  <div className="ml-8 h-2 rounded-full bg-gray-100">
-                    <div 
-                      className="h-2 rounded-full bg-green-500 transition-all"
-                      style={{ width: `${item.progress}%` }}
-                    />
-                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-gray-500">
+                  <Clock className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm">No recent activity</p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
+        </div>
+
+        {/* Active Projects Quick View */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900">Active Projects</h2>
+            <Link href="/projects" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+              View all
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          
+          {activeProjects.length > 0 ? (
+            <div className="divide-y divide-gray-100">
+              {activeProjects.slice(0, 5).map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/projects/${project.id}`}
+                  className="flex items-center justify-between p-4 hover:bg-gray-50"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{project.reference || 'No reference'}</p>
+                    <p className="text-sm text-gray-500">{project.community || 'No location'}</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[project.status as ProjectStatus] || 'bg-gray-100 text-gray-800'}`}>
+                      {STATUS_LABELS[project.status as ProjectStatus] || project.status}
+                    </span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {formatCurrency(project.contract_value || 0)}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-gray-500">
+              <FolderKanban className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <p>No active projects</p>
+              <Link href="/projects/new" className="text-sm text-blue-600 hover:text-blue-700 mt-2 inline-block">
+                Create your first project
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>
