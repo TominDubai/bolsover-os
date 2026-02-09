@@ -361,6 +361,7 @@ export default function BOQImportPage() {
           const itemsToInsert = categoryItems.map(item => ({
             boq_id: boq.id,
             category_id: category.id,
+            item_code: item.itemCode,
             description: item.description,
             quantity: item.quantity,
             unit: item.unit,

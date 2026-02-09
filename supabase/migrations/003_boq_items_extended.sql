@@ -1,7 +1,8 @@
--- Add quantity, unit, and internal pricing columns to boq_items
+-- Add item_code, quantity, unit, and internal pricing columns to boq_items
 -- These internal columns (supplier costs, markup) are never shown to clients
 
 ALTER TABLE boq_items 
+ADD COLUMN IF NOT EXISTS item_code VARCHAR(20),
 ADD COLUMN IF NOT EXISTS quantity DECIMAL(12,3) DEFAULT 1,
 ADD COLUMN IF NOT EXISTS unit VARCHAR(20) DEFAULT 'item',
 ADD COLUMN IF NOT EXISTS unit_cost DECIMAL(12,2),
