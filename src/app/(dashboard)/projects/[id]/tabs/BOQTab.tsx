@@ -60,12 +60,89 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function BOQTab({ projectId }: BOQTabProps) {
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [boqs, setBOQs] = useState<BOQ[]>([])
   const [activeBOQ, setActiveBOQ] = useState<BOQ | null>(null)
   const [categories, setCategories] = useState<BOQCategory[]>([])
   const [items, setItems] = useState<BOQItem[]>([])
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const supabase = createClient()
+
+  const handleSubmitForApproval = async () => {
+    if (!activeBOQ) return
+    setSubmitting(true)
+    
+    try {
+      const { error } = await supabase
+        .from('boq')
+        .update({
+          status: 'pending_approval',
+          submitted_at: new Date().toISOString(),
+        })
+        .eq('id', activeBOQ.id)
+
+      if (error) throw error
+
+      // Update local state
+      setActiveBOQ({ ...activeBOQ, status: 'pending_approval', submitted_at: new Date().toISOString() })
+      setBOQs(boqs.map(b => b.id === activeBOQ.id ? { ...b, status: 'pending_approval' } : b))
+    } catch (err) {
+      console.error('Failed to submit:', err)
+      alert('Failed to submit BOQ for approval')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleApprove = async () => {
+    if (!activeBOQ) return
+    setSubmitting(true)
+    
+    try {
+      const { error } = await supabase
+        .from('boq')
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+        })
+        .eq('id', activeBOQ.id)
+
+      if (error) throw error
+
+      setActiveBOQ({ ...activeBOQ, status: 'approved', approved_at: new Date().toISOString() })
+      setBOQs(boqs.map(b => b.id === activeBOQ.id ? { ...b, status: 'approved' } : b))
+    } catch (err) {
+      console.error('Failed to approve:', err)
+      alert('Failed to approve BOQ')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSendToClient = async () => {
+    if (!activeBOQ) return
+    setSubmitting(true)
+    
+    try {
+      const { error } = await supabase
+        .from('boq')
+        .update({
+          status: 'sent',
+          sent_to_client_at: new Date().toISOString(),
+        })
+        .eq('id', activeBOQ.id)
+
+      if (error) throw error
+
+      setActiveBOQ({ ...activeBOQ, status: 'sent', sent_to_client_at: new Date().toISOString() })
+      setBOQs(boqs.map(b => b.id === activeBOQ.id ? { ...b, status: 'sent' } : b))
+    } catch (err) {
+      console.error('Failed to send:', err)
+      alert('Failed to mark as sent')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   useEffect(() => {
     async function fetchBOQs() {
@@ -184,14 +261,32 @@ export function BOQTab({ projectId }: BOQTabProps) {
         </div>
         <div className="flex items-center gap-2">
           {activeBOQ?.status === 'draft' && (
-            <button className="inline-flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100">
-              <Clock className="h-4 w-4" />
+            <button 
+              onClick={handleSubmitForApproval}
+              disabled={submitting}
+              className="inline-flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
               Submit for Approval
             </button>
           )}
+          {activeBOQ?.status === 'pending_approval' && (
+            <button 
+              onClick={handleApprove}
+              disabled={submitting}
+              className="inline-flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Approve BOQ
+            </button>
+          )}
           {activeBOQ?.status === 'approved' && (
-            <button className="inline-flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100">
-              <Send className="h-4 w-4" />
+            <button 
+              onClick={handleSendToClient}
+              disabled={submitting}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Send to Client
             </button>
           )}
