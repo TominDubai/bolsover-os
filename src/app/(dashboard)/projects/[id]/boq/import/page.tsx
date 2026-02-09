@@ -17,6 +17,7 @@ import {
   Wand2
 } from 'lucide-react'
 import Link from 'next/link'
+import { extractImagesFromExcel, uploadImageToStorage } from '@/lib/boq-image-extractor'
 
 type Step = 'upload' | 'preview' | 'mapping' | 'importing' | 'done'
 type ParseMode = 'auto' | 'manual'
@@ -27,6 +28,7 @@ interface ParsedItem {
   description: string
   quantity: number
   unit: string
+  rowIndex: number            // Excel row index for image mapping
   // Visible columns (H, I)
   unitPrice: number           // Col H: Price VAT Inc (client unit price)
   total: number               // Col I: Total
@@ -66,6 +68,8 @@ export default function BOQImportPage() {
   // For auto-parse mode
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([])
   const [categories, setCategories] = useState<string[]>([])
+  const [extractedImages, setExtractedImages] = useState<Map<number, Blob>>(new Map())
+  const [rawFile, setRawFile] = useState<File | null>(null)
   
   // For manual mode
   const [headers, setHeaders] = useState<string[]>([])
@@ -191,6 +195,7 @@ export default function BOQImportPage() {
         description: description,
         quantity: qty,
         unit: unit || 'item',
+        rowIndex: i,  // Excel row index for image mapping
         unitPrice: unitPrice,
         total: total || qty * unitPrice,
         // Internal pricing
@@ -244,6 +249,16 @@ export default function BOQImportPage() {
         setParsedItems(items)
         setCategories(cats)
         setParseMode('auto')
+        setRawFile(file)
+        
+        // Extract images from Excel
+        try {
+          const images = await extractImagesFromExcel(file)
+          setExtractedImages(images)
+          console.log('📸 Found images for rows:', Array.from(images.keys()))
+        } catch (imgErr) {
+          console.warn('Could not extract images:', imgErr)
+        }
         
         // Try to extract reference from file
         const refMatch = file.name.match(/BBC[\/\-_]?\d+[\/\-_]?\d+/i)
@@ -356,30 +371,48 @@ export default function BOQImportPage() {
 
           if (catError) throw catError
 
-          // Create items
+          // Create items (with image upload)
           let itemOrder = 0
-          const itemsToInsert = categoryItems.map(item => ({
-            boq_id: boq.id,
-            category_id: category.id,
-            item_code: item.itemCode,
-            description: item.description,
-            quantity: item.quantity,
-            unit: item.unit,
-            unit_cost: item.supplierUnitCost,
-            cost: item.quantity * item.supplierUnitCost,
-            price: item.total || item.quantity * item.unitPrice,
-            is_inhouse: false,
-            sort_order: itemOrder++,
-            // Internal pricing columns (J-Q)
-            supplier_unit_cost: item.supplierUnitCost,
-            supplier_unit_cost_vat: item.supplierUnitCostVat,
-            markup_percent: item.markupPercent * 100, // Convert 0.3 to 30
-            markup_value: item.markupValue,
-            client_unit_price: item.clientUnitPrice,
-            client_unit_price_vat: item.clientUnitPriceVat,
-            profit_margin_percent: item.profitMarginPercent,
-            profit: item.profit,
-          }))
+          const itemsToInsert = await Promise.all(
+            categoryItems.map(async (item, idx) => {
+              // Check if this item has an image
+              let imageUrl: string | null = null
+              const imageBlob = extractedImages.get(item.rowIndex)
+              if (imageBlob) {
+                console.log(`📸 Uploading image for row ${item.rowIndex}...`)
+                imageUrl = await uploadImageToStorage(
+                  supabase,
+                  imageBlob,
+                  projectId,
+                  totalItemsCreated + idx
+                )
+              }
+
+              return {
+                boq_id: boq.id,
+                category_id: category.id,
+                item_code: item.itemCode,
+                description: item.description,
+                quantity: item.quantity,
+                unit: item.unit,
+                unit_cost: item.supplierUnitCost,
+                cost: item.quantity * item.supplierUnitCost,
+                price: item.total || item.quantity * item.unitPrice,
+                is_inhouse: false,
+                sort_order: itemOrder++,
+                image_url: imageUrl,
+                // Internal pricing columns (J-Q)
+                supplier_unit_cost: item.supplierUnitCost,
+                supplier_unit_cost_vat: item.supplierUnitCostVat,
+                markup_percent: item.markupPercent * 100, // Convert 0.3 to 30
+                markup_value: item.markupValue,
+                client_unit_price: item.clientUnitPrice,
+                client_unit_price_vat: item.clientUnitPriceVat,
+                profit_margin_percent: item.profitMarginPercent,
+                profit: item.profit,
+              }
+            })
+          )
 
           if (itemsToInsert.length > 0) {
             const { error: itemsError } = await supabase

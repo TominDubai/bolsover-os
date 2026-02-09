@@ -44,10 +44,14 @@ interface BOQCategory {
 interface BOQItem {
   id: string
   category_id: string
+  item_code: string | null
   description: string
+  quantity: number | null
+  unit: string | null
   is_inhouse: boolean
   cost: number | null
   price: number | null
+  image_url: string | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -364,26 +368,44 @@ export function BOQTab({ projectId }: BOQTabProps) {
                     <table className="w-full">
                       <thead>
                         <tr className="text-xs text-gray-500 uppercase">
-                          <th className="text-left px-4 py-2 pl-12">Description</th>
-                          <th className="text-center px-4 py-2 w-24">Type</th>
-                          <th className="text-right px-4 py-2 w-32">Cost</th>
-                          <th className="text-right px-4 py-2 w-32">Price</th>
+                          <th className="text-left px-4 py-2 w-16">Code</th>
+                          <th className="text-left px-4 py-2">Description</th>
+                          <th className="text-right px-4 py-2 w-20">Qty</th>
+                          <th className="text-left px-4 py-2 w-16">Unit</th>
+                          <th className="text-right px-4 py-2 w-28">Cost</th>
+                          <th className="text-right px-4 py-2 w-28">Price</th>
                         </tr>
                       </thead>
                       <tbody>
                         {categoryItems.map((item) => (
                           <tr key={item.id} className="border-t border-gray-200">
-                            <td className="px-4 py-3 pl-12 text-sm text-gray-900">
-                              {item.description}
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              {item.item_code || '—'}
                             </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`text-xs px-2 py-0.5 rounded ${
-                                item.is_inhouse 
-                                  ? 'bg-blue-100 text-blue-700' 
-                                  : 'bg-gray-100 text-gray-600'
-                              }`}>
-                                {item.is_inhouse ? 'In-house' : 'Sub'}
-                              </span>
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              <div className="flex items-start gap-3">
+                                {item.image_url && (
+                                  <a 
+                                    href={item.image_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="flex-shrink-0"
+                                  >
+                                    <img 
+                                      src={item.image_url} 
+                                      alt="" 
+                                      className="w-12 h-12 object-cover rounded border border-gray-200 hover:border-blue-400 transition-colors"
+                                    />
+                                  </a>
+                                )}
+                                <span>{item.description}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm text-gray-600">
+                              {item.quantity || 1}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {item.unit || 'item'}
                             </td>
                             <td className="px-4 py-3 text-right text-sm text-gray-600">
                               {formatCurrency(item.cost)}
