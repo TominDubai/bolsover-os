@@ -426,7 +426,7 @@ export function BOQTab({ projectId }: BOQTabProps) {
                                     <img 
                                       src={item.image_url} 
                                       alt="" 
-                                      className="w-12 h-12 object-cover rounded border border-gray-200 hover:border-blue-400 transition-colors"
+                                      className="w-24 h-24 object-cover rounded border border-gray-200 hover:border-blue-400 transition-colors"
                                     />
                                   </a>
                                 )}
