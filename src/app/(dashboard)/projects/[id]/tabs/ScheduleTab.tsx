@@ -63,7 +63,94 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
   const [phases, setPhases] = useState<Phase[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set())
+  const [newTaskText, setNewTaskText] = useState<Record<string, string>>({})
+  const [addingTask, setAddingTask] = useState<string | null>(null)
   const supabase = createClient()
+
+  // Toggle task status: pending → in_progress → complete → pending
+  const cycleTaskStatus = async (task: Task) => {
+    const statusOrder = ['pending', 'in_progress', 'complete']
+    const currentIndex = statusOrder.indexOf(task.status)
+    const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length]
+
+    const { error } = await supabase
+      .from('tasks')
+      .update({ status: nextStatus })
+      .eq('id', task.id)
+
+    if (!error) {
+      setTasks(tasks.map(t => t.id === task.id ? { ...t, status: nextStatus } : t))
+      
+      // Update phase progress
+      const phaseTasks = tasks.map(t => t.id === task.id ? { ...t, status: nextStatus } : t)
+        .filter(t => t.phase_id === task.phase_id)
+      const completed = phaseTasks.filter(t => t.status === 'complete').length
+      const progress = phaseTasks.length > 0 ? Math.round((completed / phaseTasks.length) * 100) : 0
+      
+      await supabase
+        .from('phases')
+        .update({ progress_percent: progress })
+        .eq('id', task.phase_id)
+      
+      setPhases(phases.map(p => p.id === task.phase_id ? { ...p, progress_percent: progress } : p))
+    }
+  }
+
+  // Add new task to a phase
+  const addTask = async (phaseId: string) => {
+    const text = newTaskText[phaseId]?.trim()
+    if (!text) return
+
+    setAddingTask(phaseId)
+    
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        phase_id: phaseId,
+        description: text,
+        status: 'pending',
+        sort_order: tasks.filter(t => t.phase_id === phaseId).length,
+      })
+      .select()
+      .single()
+
+    if (!error && data) {
+      setTasks([...tasks, data])
+      setNewTaskText({ ...newTaskText, [phaseId]: '' })
+    }
+    
+    setAddingTask(null)
+  }
+
+  // Add new phase
+  const [newPhaseName, setNewPhaseName] = useState('')
+  const [addingPhase, setAddingPhase] = useState(false)
+
+  const addPhase = async () => {
+    if (!newPhaseName.trim() || !schedule) return
+
+    setAddingPhase(true)
+    
+    const { data, error } = await supabase
+      .from('phases')
+      .insert({
+        schedule_id: schedule.id,
+        name: newPhaseName.trim(),
+        status: 'not_started',
+        progress_percent: 0,
+        sort_order: phases.length,
+      })
+      .select()
+      .single()
+
+    if (!error && data) {
+      setPhases([...phases, data])
+      setNewPhaseName('')
+      setExpandedPhases(new Set([...expandedPhases, data.id]))
+    }
+    
+    setAddingPhase(false)
+  }
 
   useEffect(() => {
     async function fetchSchedule() {
@@ -241,7 +328,8 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
                         {phaseTasks.map((task) => (
                           <div 
                             key={task.id}
-                            className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100"
+                            onClick={() => cycleTaskStatus(task)}
+                            className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100 cursor-pointer hover:border-gray-300 transition-colors"
                           >
                             <div className="flex items-center gap-3">
                               {task.status === 'complete' ? (
@@ -260,7 +348,7 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
                                 <span className="text-xs text-gray-500">{formatDate(task.due_date)}</span>
                               )}
                               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TASK_STATUS_COLORS[task.status]}`}>
-                                {task.status}
+                                {task.status.replace('_', ' ')}
                               </span>
                             </div>
                           </div>
@@ -269,10 +357,30 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
                     ) : (
                       <p className="text-sm text-gray-500 text-center py-4">No tasks in this phase</p>
                     )}
-                    <button className="mt-3 text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                      <Plus className="h-4 w-4" />
-                      Add task
-                    </button>
+                    
+                    {/* Add Task Input */}
+                    <div className="mt-3 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newTaskText[phase.id] || ''}
+                        onChange={(e) => setNewTaskText({ ...newTaskText, [phase.id]: e.target.value })}
+                        onKeyDown={(e) => e.key === 'Enter' && addTask(phase.id)}
+                        placeholder="Add a task..."
+                        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                      />
+                      <button 
+                        onClick={() => addTask(phase.id)}
+                        disabled={addingTask === phase.id || !newTaskText[phase.id]?.trim()}
+                        className="inline-flex items-center gap-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {addingTask === phase.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Plus className="h-4 w-4" />
+                        )}
+                        Add
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -285,11 +393,29 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
         )}
       </div>
 
-      {/* Add Phase Button */}
-      <button className="w-full py-3 border-2 border-dashed border-gray-200 rounded-lg text-sm text-gray-500 hover:border-gray-300 hover:text-gray-600 flex items-center justify-center gap-2">
-        <Plus className="h-4 w-4" />
-        Add Phase
-      </button>
+      {/* Add Phase */}
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={newPhaseName}
+          onChange={(e) => setNewPhaseName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addPhase()}
+          placeholder="New phase name..."
+          className="flex-1 rounded-lg border-2 border-dashed border-gray-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none"
+        />
+        <button 
+          onClick={addPhase}
+          disabled={addingPhase || !newPhaseName.trim()}
+          className="inline-flex items-center gap-2 px-4 py-3 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {addingPhase ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
+          Add Phase
+        </button>
+      </div>
     </div>
   )
 }
