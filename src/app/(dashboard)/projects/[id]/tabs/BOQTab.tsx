@@ -11,7 +11,8 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
-  Upload
+  Upload,
+  Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -143,6 +144,37 @@ export function BOQTab({ projectId }: BOQTabProps) {
     } catch (err) {
       console.error('Failed to send:', err)
       alert('Failed to mark as sent')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDeleteBOQ = async (boqId: string) => {
+    if (!confirm('Delete this BOQ? This cannot be undone.')) return
+    setSubmitting(true)
+    
+    try {
+      // Delete BOQ (cascade will handle items and categories)
+      const { error } = await supabase
+        .from('boq')
+        .delete()
+        .eq('id', boqId)
+
+      if (error) throw error
+
+      // Update local state
+      const remainingBOQs = boqs.filter(b => b.id !== boqId)
+      setBOQs(remainingBOQs)
+      
+      // If we deleted the active BOQ, switch to another
+      if (activeBOQ?.id === boqId) {
+        setActiveBOQ(remainingBOQs[0] || null)
+        setCategories([])
+        setItems([])
+      }
+    } catch (err) {
+      console.error('Failed to delete:', err)
+      alert('Failed to delete BOQ')
     } finally {
       setSubmitting(false)
     }
@@ -429,31 +461,46 @@ export function BOQTab({ projectId }: BOQTabProps) {
         )}
       </div>
 
-      {/* Version History */}
-      {boqs.length > 1 && (
+      {/* Version History & Management */}
+      {boqs.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-gray-500 mb-3">Version History</h4>
+          <h4 className="text-sm font-medium text-gray-500 mb-3">
+            {boqs.length > 1 ? 'Version History' : 'BOQ Management'}
+          </h4>
           <div className="space-y-2">
             {boqs.map((boq) => (
-              <button
+              <div
                 key={boq.id}
-                onClick={() => setActiveBOQ(boq)}
-                className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
                   activeBOQ?.id === boq.id 
                     ? 'border-blue-200 bg-blue-50' 
                     : 'border-gray-200 hover:bg-gray-50'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setActiveBOQ(boq)}
+                  className="flex items-center gap-3 flex-1"
+                >
                   <span className="font-medium">v{boq.version}</span>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[boq.status]}`}>
                     {boq.status.replace('_', ' ')}
                   </span>
-                </div>
-                <span className="text-sm text-gray-500">
-                  {formatCurrency(boq.client_price)}
-                </span>
-              </button>
+                  <span className="text-sm text-gray-500">
+                    {formatCurrency(boq.client_price)}
+                  </span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDeleteBOQ(boq.id)
+                  }}
+                  disabled={submitting}
+                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                  title="Delete this BOQ"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             ))}
           </div>
         </div>
