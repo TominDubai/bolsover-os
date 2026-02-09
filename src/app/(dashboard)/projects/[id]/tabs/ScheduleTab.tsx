@@ -152,6 +152,34 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
     setAddingPhase(false)
   }
 
+  // Update phase dates
+  const updatePhaseDate = async (phaseId: string, field: 'start_date' | 'end_date', value: string) => {
+    const { error } = await supabase
+      .from('phases')
+      .update({ [field]: value || null })
+      .eq('id', phaseId)
+
+    if (!error) {
+      setPhases(phases.map(p => p.id === phaseId ? { ...p, [field]: value || null } : p))
+    }
+  }
+
+  // Update phase status
+  const cyclePhaseStatus = async (phase: Phase) => {
+    const statusOrder = ['not_started', 'in_progress', 'complete', 'delayed']
+    const currentIndex = statusOrder.indexOf(phase.status)
+    const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length]
+
+    const { error } = await supabase
+      .from('phases')
+      .update({ status: nextStatus })
+      .eq('id', phase.id)
+
+    if (!error) {
+      setPhases(phases.map(p => p.id === phase.id ? { ...p, status: nextStatus } : p))
+    }
+  }
+
   useEffect(() => {
     async function fetchSchedule() {
       setLoading(true)
@@ -288,27 +316,40 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
 
             return (
               <div key={phase.id} className="border-b last:border-b-0">
-                <button
-                  onClick={() => togglePhase(phase.id)}
-                  className="w-full p-4 hover:bg-gray-50 transition-colors"
-                >
+                <div className="p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4 text-gray-400" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-gray-400" />
-                      )}
+                      <button onClick={() => togglePhase(phase.id)}>
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-400" />
+                        )}
+                      </button>
                       <span className="font-medium text-gray-900">{phase.name}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PHASE_STATUS_COLORS[phase.status]}`}>
+                      <button
+                        onClick={() => cyclePhaseStatus(phase)}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${PHASE_STATUS_COLORS[phase.status]} hover:opacity-80`}
+                        title="Click to change status"
+                      >
                         {phase.status.replace('_', ' ')}
-                      </span>
+                      </button>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-gray-500">
-                        {formatDate(phase.start_date)} - {formatDate(phase.end_date)}
-                      </span>
-                      <div className="w-24 bg-gray-200 rounded-full h-1.5">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="date"
+                        value={phase.start_date || ''}
+                        onChange={(e) => updatePhaseDate(phase.id, 'start_date', e.target.value)}
+                        className="rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+                      />
+                      <span className="text-gray-400">→</span>
+                      <input
+                        type="date"
+                        value={phase.end_date || ''}
+                        onChange={(e) => updatePhaseDate(phase.id, 'end_date', e.target.value)}
+                        className="rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+                      />
+                      <div className="w-20 bg-gray-200 rounded-full h-1.5">
                         <div 
                           className={`h-1.5 rounded-full ${
                             phase.status === 'delayed' ? 'bg-red-500' : 'bg-blue-600'
@@ -319,7 +360,7 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
                       <span className="text-sm font-medium w-10 text-right">{phase.progress_percent}%</span>
                     </div>
                   </div>
-                </button>
+                </div>
 
                 {isExpanded && (
                   <div className="bg-gray-50 border-t px-4 py-3">
