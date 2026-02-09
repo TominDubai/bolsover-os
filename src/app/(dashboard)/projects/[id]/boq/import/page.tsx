@@ -27,9 +27,18 @@ interface ParsedItem {
   description: string
   quantity: number
   unit: string
-  unitCost: number  // Supplier cost
-  unitPrice: number // Client price
-  total: number
+  // Visible columns (H, I)
+  unitPrice: number           // Col H: Price VAT Inc (client unit price)
+  total: number               // Col I: Total
+  // Internal columns (J-Q) - never shown to clients
+  supplierUnitCost: number    // Col J: Supplier Unit Price (VAT Exc)
+  supplierUnitCostVat: number // Col K: SUP inc VAT
+  markupPercent: number       // Col L: Markup %
+  markupValue: number         // Col M: Markup Value
+  clientUnitPrice: number     // Col N: Client Unit Price (same as H usually)
+  clientUnitPriceVat: number  // Col O: Client Price inc VAT
+  profitMarginPercent: number // Col P: Profit Margin %
+  profit: number              // Col Q: Profit
 }
 
 interface ParsedRow {
@@ -148,11 +157,22 @@ export default function BOQImportPage() {
       
       // Also check if it has description and numeric data
       const description = String(row[2] || row[1] || '').trim()
+      
+      // Visible columns
       const qty = parseFloat(String(row[5] || '1')) || 1
       const unit = String(row[6] || 'item').trim()
-      const unitPrice = parseFloat(String(row[7] || '0')) || 0
-      const total = parseFloat(String(row[8] || '0')) || 0
-      const supplierCost = parseFloat(String(row[9] || row[10] || '0')) || 0
+      const unitPrice = parseFloat(String(row[7] || '0')) || 0         // Col H: Price VAT Inc
+      const total = parseFloat(String(row[8] || '0')) || 0             // Col I: Total
+      
+      // Internal columns (J-Q) - never shown to clients
+      const supplierUnitCost = parseFloat(String(row[9] || '0')) || 0       // Col J: Supplier Unit (VAT exc)
+      const supplierUnitCostVat = parseFloat(String(row[10] || '0')) || 0   // Col K: SUP inc VAT
+      const markupPercent = parseFloat(String(row[11] || '0')) || 0         // Col L: Markup %
+      const markupValue = parseFloat(String(row[12] || '0')) || 0           // Col M: Markup Value
+      const clientUnitPrice = parseFloat(String(row[13] || '0')) || 0       // Col N: Client Unit Price
+      const clientUnitPriceVat = parseFloat(String(row[14] || '0')) || 0    // Col O: Client Price inc VAT
+      const profitMarginPercent = parseFloat(String(row[15] || '0')) || 0   // Col P: Profit Margin %
+      const profit = parseFloat(String(row[16] || '0')) || 0                // Col Q: Profit
       
       // Skip if no description or no price data
       if (!description || description.length < 3) continue
@@ -171,9 +191,17 @@ export default function BOQImportPage() {
         description: description,
         quantity: qty,
         unit: unit || 'item',
-        unitCost: supplierCost || unitPrice * 0.77, // Estimate cost if not provided (inverse of 30% margin)
         unitPrice: unitPrice,
         total: total || qty * unitPrice,
+        // Internal pricing
+        supplierUnitCost: supplierUnitCost,
+        supplierUnitCostVat: supplierUnitCostVat,
+        markupPercent: markupPercent,
+        markupValue: markupValue,
+        clientUnitPrice: clientUnitPrice || unitPrice,
+        clientUnitPriceVat: clientUnitPriceVat,
+        profitMarginPercent: profitMarginPercent,
+        profit: profit,
       })
     }
     
@@ -336,11 +364,20 @@ export default function BOQImportPage() {
             description: item.description,
             quantity: item.quantity,
             unit: item.unit,
-            unit_cost: item.unitCost,
-            cost: item.quantity * item.unitCost,
+            unit_cost: item.supplierUnitCost,
+            cost: item.quantity * item.supplierUnitCost,
             price: item.total || item.quantity * item.unitPrice,
             is_inhouse: false,
             sort_order: itemOrder++,
+            // Internal pricing columns (J-Q)
+            supplier_unit_cost: item.supplierUnitCost,
+            supplier_unit_cost_vat: item.supplierUnitCostVat,
+            markup_percent: item.markupPercent * 100, // Convert 0.3 to 30
+            markup_value: item.markupValue,
+            client_unit_price: item.clientUnitPrice,
+            client_unit_price_vat: item.clientUnitPriceVat,
+            profit_margin_percent: item.profitMarginPercent,
+            profit: item.profit,
           }))
 
           if (itemsToInsert.length > 0) {
