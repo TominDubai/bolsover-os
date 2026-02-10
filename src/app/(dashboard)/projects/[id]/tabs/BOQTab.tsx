@@ -334,10 +334,10 @@ export function BOQTab({ projectId }: BOQTabProps) {
             Import
           </Link>
           <Link
-            href={`/projects/${projectId}/boq/${activeBOQ?.id}/edit`}
+            href={`/projects/${projectId}/boq/pdf`}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            Edit BOQ
+            Manage BOQ PDFs
           </Link>
         </div>
       </div>
