@@ -118,13 +118,21 @@ export default async function ProjectDetailPage({ params }: Props) {
           { label: project.reference || 'Project' }
         ]}
         actions={
-          <Link
-            href={`/projects/${id}/edit`}
-            className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            <Edit className="h-4 w-4" />
-            Edit
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/projects/${id}/settings`}
+              className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Settings
+            </Link>
+            <Link
+              href={`/projects/${id}/edit`}
+              className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Edit className="h-4 w-4" />
+              Edit
+            </Link>
+          </div>
         }
       />
 
