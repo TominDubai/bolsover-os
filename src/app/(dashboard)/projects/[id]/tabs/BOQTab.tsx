@@ -261,21 +261,14 @@ export function BOQTab({ projectId }: BOQTabProps) {
       <div className="text-center py-12">
         <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">No BOQ Created</h3>
-        <p className="text-gray-500 mb-6">Create a Bill of Quantities to start pricing this project</p>
-        <div className="flex items-center justify-center gap-3">
+        <p className="text-gray-500 mb-6">Upload a BOQ PDF to start tracking versions</p>
+        <div className="flex items-center justify-center">
           <Link
-            href={`/projects/${projectId}/boq/import`}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            <Upload className="h-4 w-4" />
-            Import from Excel
-          </Link>
-          <Link
-            href={`/projects/${projectId}/boq/new`}
+            href={`/projects/${projectId}/boq/pdf`}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <Plus className="h-4 w-4" />
-            Create Manually
+            <FileText className="h-4 w-4" />
+            Manage BOQ PDFs
           </Link>
         </div>
       </div>
