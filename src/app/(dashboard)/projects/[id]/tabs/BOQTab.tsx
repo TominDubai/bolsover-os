@@ -445,6 +445,14 @@ export function BOQTab({ projectId }: BOQTabProps) {
                             <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
                               {formatCurrency(item.price)}
                             </td>
+                            <td className="px-4 py-3 text-center">
+                              <Link
+                                href={`/projects/${projectId}/boq/${activeBOQ.id}/edit#item-${item.id}`}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                Edit
+                              </Link>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
