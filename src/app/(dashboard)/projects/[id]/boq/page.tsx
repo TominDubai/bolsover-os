@@ -1,5 +1,6 @@
-import { SimpleBOQManager } from '@/components/SimpleBOQManager'
+import { redirect } from 'next/navigation'
 
-export default async function BOQPage({ params }: { params: { id: string } }) {
-  return <SimpleBOQManager projectId={params.id} />
+export default function BOQPage({ params }: { params: { id: string } }) {
+  // Simple redirect to the working BOQ system
+  redirect(`/projects/${params.id}/boq/simple`)
 }
