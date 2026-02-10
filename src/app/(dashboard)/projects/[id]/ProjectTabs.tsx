@@ -54,7 +54,7 @@ export function ProjectTabs({ projectId, counts }: ProjectTabsProps) {
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       {/* Tab Navigation */}
       <div className="border-b border-gray-100">
-        <nav className="flex overflow-x-auto" aria-label="Tabs">
+        <nav className="flex overflow-x-auto scrollbar-hide" aria-label="Tabs">
           {tabs.map((tab) => {
             const Icon = tab.icon
             const count = tab.countKey ? counts[tab.countKey] : null
@@ -65,17 +65,18 @@ export function ProjectTabs({ projectId, counts }: ProjectTabsProps) {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`
-                  flex items-center gap-2 px-5 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors
+                  flex items-center gap-1.5 px-3 py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors min-w-max
                   ${isActive 
                     ? 'border-blue-600 text-blue-600' 
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }
                 `}
               >
-                <Icon className="h-4 w-4" />
-                {tab.label}
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.label.substring(0, 4)}</span>
                 {count !== null && count > 0 && (
-                  <span className={`ml-1 rounded-full px-2 py-0.5 text-xs ${
+                  <span className={`ml-1 rounded-full px-1.5 py-0.5 text-xs $${
                     isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
                   }`}>
                     {count}

@@ -35,18 +35,18 @@ export function Header({ title, subtitle, breadcrumbs, actions }: HeaderProps) {
             ))}
           </nav>
         )}
-        <h1 className="text-lg md:text-xl font-semibold text-gray-900 truncate">{title}</h1>
-        {subtitle && <p className="text-sm text-gray-500 hidden sm:block">{subtitle}</p>}
+        <h1 className="text-base md:text-lg font-semibold text-gray-900 truncate">{title}</h1>
+        {subtitle && <p className="text-sm text-gray-500 hidden md:block">{subtitle}</p>}
       </div>
       
       <div className="flex items-center gap-2 md:gap-4">
         {/* Search - hidden on mobile */}
-        <div className="relative hidden md:block">
+        <div className="relative hidden lg:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Search..."
-            className="h-9 w-48 lg:w-64 rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="h-9 w-32 lg:w-48 xl:w-64 rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
         
@@ -56,8 +56,10 @@ export function Header({ title, subtitle, breadcrumbs, actions }: HeaderProps) {
           <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
         </button>
         
-        {/* Actions */}
-        {actions}
+        {/* Actions - responsive */}
+        <div className="flex items-center gap-2">
+          {actions}
+        </div>
       </div>
     </header>
   )
