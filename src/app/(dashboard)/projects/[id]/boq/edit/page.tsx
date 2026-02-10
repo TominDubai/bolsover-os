@@ -5,6 +5,7 @@ import { EditBOQForm } from '@/components/EditBOQForm'
 interface EditBOQPageProps {
   params: {
     id: string
+    boqId: string
   }
 }
 
@@ -29,6 +30,7 @@ export default async function EditBOQPage({ params }: EditBOQPageProps) {
   const { data: boq } = await supabase
     .from('boq')
     .select('*')
+    .eq('id', params.boqId)
     .eq('project_id', params.id)
     .single()
 
