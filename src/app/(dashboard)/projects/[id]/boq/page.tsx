@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation'
+import { SimpleBOQManager } from '@/components/SimpleBOQManager'
 
-export default function BOQRedirectPage() {
-  // Redirect to PDF BOQ system
-  redirect('/projects/[id]/boq/pdf')
+export default async function BOQPage({ params }: { params: { id: string } }) {
+  return <SimpleBOQManager projectId={params.id} />
 }
