@@ -1,20 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { 
-  Plus, 
-  FileText,
-  Image,
-  FileSpreadsheet,
-  File,
-  Upload,
-  Loader2,
-  Download,
-  Eye,
-  Trash2,
-  FolderOpen
-} from 'lucide-react'
+import { Plus, UploadCloud, FileText, Image, Download, Trash2, Search } from 'lucide-react'
+import Link from 'next/link'
 
 interface DocumentsTabProps {
   projectId: string
@@ -23,229 +12,267 @@ interface DocumentsTabProps {
 interface Document {
   id: string
   name: string
-  file_url: string
+  description: string | null
   category: string
-  file_size: number | null
-  mime_type: string | null
-  version: number
+  file_url: string
+  file_size: number
+  file_type: string
+  uploaded_by: string
   uploaded_at: string
-  uploaded_by_user?: {
-    name: string
-  }
+  tags: string[]
+  metadata: any
 }
 
-const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
-  drawing: { label: 'Drawings', color: 'bg-blue-100 text-blue-700' },
-  contract: { label: 'Contracts', color: 'bg-purple-100 text-purple-700' },
-  invoice: { label: 'Invoices', color: 'bg-green-100 text-green-700' },
-  approval: { label: 'Approvals', color: 'bg-amber-100 text-amber-700' },
-  gate_pass: { label: 'Gate Passes', color: 'bg-pink-100 text-pink-700' },
-  correspondence: { label: 'Correspondence', color: 'bg-cyan-100 text-cyan-700' },
-  photo: { label: 'Photos', color: 'bg-indigo-100 text-indigo-700' },
-  report: { label: 'Reports', color: 'bg-orange-100 text-orange-700' },
-  other: { label: 'Other', color: 'bg-gray-100 text-gray-700' },
-}
+const CATEGORIES = [
+  { value: 'contracts', label: 'Contracts', icon: FileText },
+  { value: 'specifications', label: 'Specifications', icon: FileText },
+  { value: 'drawings', label: 'Drawings', icon: FileText },
+  { value: 'photos', label: 'Photos', icon: Image },
+  { value: 'reports', label: 'Reports', icon: FileText },
+  { value: 'approvals', label: 'Approvals', icon: FileText },
+  { value: 'variations', label: 'Variations', icon: FileText },
+  { value: 'other', label: 'Other', icon: FileText },
+]
 
-function getFileIcon(mimeType: string | null) {
-  if (!mimeType) return File
-  if (mimeType.startsWith('image/')) return Image
-  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return FileSpreadsheet
-  return FileText
-}
-
-function formatFileSize(bytes: number | null) {
-  if (!bytes) return '—'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 export function DocumentsTab({ projectId }: DocumentsTabProps) {
-  const [loading, setLoading] = useState(true)
   const [documents, setDocuments] = useState<Document[]>([])
-  const [filterCategory, setFilterCategory] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const [uploading, setUploading] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
-    async function fetchDocuments() {
-      setLoading(true)
+    fetchDocuments()
+  }, [projectId])
 
-      const { data } = await supabase
-        .from('documents')
-        .select(`
-          *,
-          uploaded_by_user:users!documents_uploaded_by_fkey(name)
-        `)
-        .eq('project_id', projectId)
-        .eq('is_latest', true)
-        .order('uploaded_at', { ascending: false })
+  const fetchDocuments = async () => {
+    setLoading(true)
+    
+    let query = supabase
+      .from('documents')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('uploaded_at', { ascending: false })
 
-      if (data) setDocuments(data)
-      setLoading(false)
+    if (selectedCategory !== 'all') {
+      query = query.eq('category', selectedCategory)
     }
 
-    fetchDocuments()
-  }, [projectId, supabase])
+    if (searchQuery) {
+      query = query.ilike('name', `%${searchQuery}%`)
+    }
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    })
+    const { data, error } = await query
+    
+    if (!error && data) {
+      setDocuments(data)
+    }
+    
+    setLoading(false)
   }
 
-  // Get unique categories from documents
-  const categories = [...new Set(documents.map(d => d.category))]
+  const handleFileUpload = async (file: File, category: string, description?: string) => {
+    if (!file) return
 
-  // Filter documents
-  const filteredDocs = filterCategory 
-    ? documents.filter(d => d.category === filterCategory)
-    : documents
+    setUploading(true)
+    
+    try {
+      const fileName = `${Date.now()}-${file.name}`
+      const filePath = `${projectId}/${fileName}`
 
-  // Group by category
-  const docsByCategory = filteredDocs.reduce((acc, doc) => {
-    if (!acc[doc.category]) acc[doc.category] = []
-    acc[doc.category].push(doc)
-    return acc
-  }, {} as Record<string, Document[]>)
+      // Upload file to storage
+      const { error: uploadError } = await supabase.storage
+        .from('project-documents')
+        .upload(filePath, file)
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-      </div>
-    )
+      if (uploadError) throw uploadError
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('project-documents')
+        .getPublicUrl(filePath)
+
+      // Create document record
+      const { error: dbError } = await supabase
+        .from('documents')
+        .insert({
+          project_id: projectId,
+          name: file.name,
+          description: description || '',
+          category,
+          file_url: publicUrl,
+          file_size: file.size,
+          file_type: file.type,
+          uploaded_by: (await supabase.auth.getUser()).data.user?.id,
+        })
+
+      if (dbError) throw dbError
+
+      await fetchDocuments()
+    } catch (err) {
+      console.error('Upload failed:', err)
+      alert('Failed to upload document')
+    } finally {
+      setUploading(false)
+    }
   }
+
+  const handleDelete = async (documentId: string) => {
+    if (!confirm('Delete this document?')) return
+
+    const { error } = await supabase
+      .from('documents')
+      .delete()
+      .eq('id', documentId)
+
+    if (!error) {
+      await fetchDocuments()
+    }
+  }
+
+  const filteredDocuments = documents.filter(doc => {
+    const matchesCategory = selectedCategory === 'all' || doc.category === selectedCategory
+    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         doc.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    return matchesCategory && matchesSearch
+  })
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="font-medium text-gray-900">Documents</h3>
-        <button
-          onClick={() => {/* TODO: Open upload modal */}}
-          disabled={uploading}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Documents</h3>
+          <p className="text-sm text-gray-500">Manage project documents and files</p>
+        </div>
+        
+        <Link
+          href={`/projects/${projectId}/documents/upload`}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
-          {uploading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Upload className="h-4 w-4" />
-          )}
-          Upload
-        </button>
+          <UploadCloud className="h-4 w-4" />
+          Upload Document
+        </Link>
       </div>
 
-      {/* Category Filter */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setFilterCategory(null)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            !filterCategory
-              ? 'bg-gray-900 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
+      {/* Filters */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search documents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+        </div>
+        
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
         >
-          All ({documents.length})
-        </button>
-        {Object.entries(CATEGORY_CONFIG).map(([key, config]) => {
-          const count = documents.filter(d => d.category === key).length
-          if (count === 0) return null
-          return (
-            <button
-              key={key}
-              onClick={() => setFilterCategory(key)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                filterCategory === key
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {config.label} ({count})
-            </button>
-          )
-        })}
+          <option value="all">All Categories</option>
+          {CATEGORIES.map(cat => (
+            <option key={cat.value} value={cat.value}>{cat.label}</option>
+          ))}
+        </select>
       </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        </div>
+      )}
 
       {/* Documents Grid */}
-      {filteredDocs.length > 0 ? (
-        <div className="space-y-6">
-          {Object.entries(docsByCategory).map(([category, docs]) => {
-            const categoryConfig = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.other
+      {!loading && filteredDocuments.length === 0 && (
+        <div className="text-center py-12">
+          <UploadCloud className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Documents</h3>
+          <p className="text-gray-500 mb-6">Upload your first document to get started</p>
+          <Link
+            href={`/projects/${projectId}/documents/upload`}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <UploadCloud className="h-4 w-4" />
+            Upload Document
+          </Link>
+        </div>
+      )}
 
+      {/* Documents List */}
+      {!loading && filteredDocuments.length > 0 && (
+        <div className="grid gap-4">
+          {filteredDocuments.map((doc) => {
+            const CategoryIcon = CATEGORIES.find(c => c.value === doc.category)?.icon || FileText
+            
             return (
-              <div key={category}>
-                <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
-                  <FolderOpen className="h-4 w-4" />
-                  {categoryConfig.label}
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
-                  {docs.map((doc) => {
-                    const FileIcon = getFileIcon(doc.mime_type)
-
-                    return (
-                      <div
-                        key={doc.id}
-                        className="flex items-start gap-3 p-3 bg-white border border-gray-100 rounded-lg hover:border-gray-200 transition-colors group"
-                      >
-                        <div className={`p-2 rounded-lg ${categoryConfig.color}`}>
-                          <FileIcon className="h-5 w-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900 truncate">{doc.name}</p>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                            <span>{formatFileSize(doc.file_size)}</span>
-                            <span>•</span>
-                            <span>{formatDate(doc.uploaded_at)}</span>
-                            {doc.version > 1 && (
-                              <>
-                                <span>•</span>
-                                <span>v{doc.version}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <a
-                            href={doc.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded hover:bg-gray-100"
-                            title="View"
-                          >
-                            <Eye className="h-4 w-4 text-gray-400" />
-                          </a>
-                          <a
-                            href={doc.file_url}
-                            download
-                            className="p-1.5 rounded hover:bg-gray-100"
-                            title="Download"
-                          >
-                            <Download className="h-4 w-4 text-gray-400" />
-                          </a>
-                        </div>
+              <div key={doc.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <CategoryIcon className="h-8 w-8 text-gray-400" />
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium text-gray-900">{doc.name}</h4>
+                      {doc.description && (
+                        <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
+                      )}
+                      
+                      <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                        <span className="capitalize">{doc.category}</span>
+                        <span>{formatFileSize(doc.file_size)}</span>
+                        <span>{new Date(doc.uploaded_at).toLocaleDateString()}</span>
                       </div>
-                    )
-                  })}
+                      
+                      {doc.tags && doc.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {doc.tags.map((tag, idx) => (
+                            <span key={idx} className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={doc.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-gray-400 hover:text-gray-600"
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                    
+                    <button
+                      onClick={() => handleDelete(doc.id)}
+                      className="p-2 text-gray-400 hover:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )
           })}
-        </div>
-      ) : (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <FolderOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Documents</h3>
-          <p className="text-gray-500 mb-6">Upload drawings, contracts, and other project files</p>
-          <button
-            onClick={() => {/* TODO: Open upload modal */}}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            <Upload className="h-4 w-4" />
-            Upload First Document
-          </button>
         </div>
       )}
     </div>
