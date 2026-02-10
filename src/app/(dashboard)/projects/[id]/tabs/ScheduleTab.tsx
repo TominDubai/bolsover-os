@@ -11,7 +11,9 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
-  Users
+  Users,
+  Bell,
+  X
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -65,7 +67,62 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set())
   const [newTaskText, setNewTaskText] = useState<Record<string, string>>({})
   const [addingTask, setAddingTask] = useState<string | null>(null)
+  
+  // Delay Notice Modal State
+  const [showDelayModal, setShowDelayModal] = useState(false)
+  const [delayPhaseId, setDelayPhaseId] = useState<string | null>(null)
+  const [delayReason, setDelayReason] = useState('')
+  const [delayDays, setDelayDays] = useState('')
+  const [delayNewDate, setDelayNewDate] = useState('')
+  const [sendingDelay, setSendingDelay] = useState(false)
+  
   const supabase = createClient()
+  
+  // Open delay modal for a specific phase
+  const openDelayModal = (phaseId?: string) => {
+    setDelayPhaseId(phaseId || null)
+    setDelayReason('')
+    setDelayDays('')
+    setDelayNewDate('')
+    setShowDelayModal(true)
+  }
+  
+  // Send delay notice
+  const sendDelayNotice = async () => {
+    if (!delayReason.trim()) return
+    
+    setSendingDelay(true)
+    
+    const { data: user } = await supabase.auth.getUser()
+    
+    const { error } = await supabase.from('delay_notices').insert({
+      project_id: projectId,
+      phase_id: delayPhaseId,
+      reason: delayReason.trim(),
+      days_delayed: delayDays ? parseInt(delayDays) : null,
+      new_date: delayNewDate || null,
+      created_by: user.user?.id,
+    })
+    
+    if (!error) {
+      // Mark phase as delayed if a phase was selected
+      if (delayPhaseId) {
+        await supabase
+          .from('phases')
+          .update({ status: 'delayed' })
+          .eq('id', delayPhaseId)
+        
+        setPhases(phases.map(p => p.id === delayPhaseId ? { ...p, status: 'delayed' } : p))
+      }
+      
+      setShowDelayModal(false)
+      alert('Delay notice sent to site staff!')
+    } else {
+      alert('Failed to send delay notice')
+    }
+    
+    setSendingDelay(false)
+  }
 
   // Toggle task status: pending → in_progress → complete → pending
   const cycleTaskStatus = async (task: Task) => {
@@ -280,12 +337,21 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
             </span>
           </div>
         </div>
-        <Link
-          href={`/projects/${projectId}/schedule/edit`}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Edit Schedule
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => openDelayModal()}
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600"
+          >
+            <Bell className="h-4 w-4" />
+            Send Delay Notice
+          </button>
+          <Link
+            href={`/projects/${projectId}/schedule/edit`}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Edit Schedule
+          </Link>
+        </div>
       </div>
 
       {/* Progress Overview */}
@@ -334,6 +400,15 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
                       >
                         {phase.status.replace('_', ' ')}
                       </button>
+                      {phase.status === 'delayed' && (
+                        <button
+                          onClick={() => openDelayModal(phase.id)}
+                          className="text-amber-500 hover:text-amber-600"
+                          title="Send delay notice"
+                        >
+                          <Bell className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       <input
@@ -457,6 +532,108 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
           Add Phase
         </button>
       </div>
+
+      {/* Delay Notice Modal */}
+      {showDelayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">Send Delay Notice</h3>
+              <button 
+                onClick={() => setShowDelayModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                This will notify all site staff about a schedule delay.
+              </p>
+              
+              {/* Phase Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Affected Phase (optional)
+                </label>
+                <select
+                  value={delayPhaseId || ''}
+                  onChange={(e) => setDelayPhaseId(e.target.value || null)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">General / All Phases</option>
+                  {phases.map(phase => (
+                    <option key={phase.id} value={phase.id}>{phase.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Reason */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reason for Delay *
+                </label>
+                <textarea
+                  value={delayReason}
+                  onChange={(e) => setDelayReason(e.target.value)}
+                  placeholder="e.g. Material delivery delayed, waiting for approval..."
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              
+              {/* Days Delayed */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Days Delayed
+                  </label>
+                  <input
+                    type="number"
+                    value={delayDays}
+                    onChange={(e) => setDelayDays(e.target.value)}
+                    placeholder="e.g. 3"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Target Date
+                  </label>
+                  <input
+                    type="date"
+                    value={delayNewDate}
+                    onChange={(e) => setDelayNewDate(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-end gap-3 p-4 border-t bg-gray-50 rounded-b-xl">
+              <button
+                onClick={() => setShowDelayModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendDelayNotice}
+                disabled={sendingDelay || !delayReason.trim()}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sendingDelay ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Bell className="h-4 w-4" />
+                )}
+                Send Notice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
