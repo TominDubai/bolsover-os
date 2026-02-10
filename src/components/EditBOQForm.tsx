@@ -3,18 +3,20 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Save, ArrowLeft } from 'lucide-react'
+import { Plus, Trash2, Save, ArrowLeft, Loader2 } from 'lucide-react'
 
 interface BOQItem {
   id: string
   description: string
   quantity: number
   unit: string
-  unit_cost: number
-  price: number
+  unit_cost: number | null
+  client_unit_price: number | null
   is_inhouse: boolean
-  notes: string
+  notes: string | null
   sort_order: number
+  item_code: string | null
+  image_url: string | null
 }
 
 interface BOQCategory {
@@ -49,7 +51,7 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
       quantity: 1,
       unit: 'unit',
       unit_cost: 0,
-      price: 0,
+      client_unit_price: 0,
       is_inhouse: false,
       notes: '',
       sort_order: categories.find(c => c.id === categoryId)?.items.length || 0
@@ -78,9 +80,9 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
   const updateItem = async (item: BOQItem, field: keyof BOQItem, value: any) => {
     const updatedItem = { ...item, [field]: value }
     
-    // Auto-calculate price if unit_cost changes
+    // Auto-calculate client price if unit_cost changes
     if (field === 'unit_cost' || field === 'quantity') {
-      updatedItem.price = updatedItem.unit_cost * updatedItem.quantity
+      updatedItem.client_unit_price = updatedItem.unit_cost * updatedItem.quantity
     }
 
     const { error } = await supabase
@@ -164,7 +166,7 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
                       <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                       <input
                         type="text"
-                        value={item.description}
+                        value={item.description || ''}
                         onChange={(e) => updateItem(item, 'description', e.target.value)}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
                       />
@@ -174,7 +176,7 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
                       <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
                       <input
                         type="number"
-                        value={item.quantity}
+                        value={item.quantity || 0}
                         onChange={(e) => updateItem(item, 'quantity', parseFloat(e.target.value))}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
                         min="0"
@@ -186,7 +188,7 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
                       <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
                       <input
                         type="text"
-                        value={item.unit}
+                        value={item.unit || ''}
                         onChange={(e) => updateItem(item, 'unit', e.target.value)}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
                       />
@@ -196,7 +198,7 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
                       <label className="block text-sm font-medium text-gray-700 mb-1">Unit Cost</label>
                       <input
                         type="number"
-                        value={item.unit_cost}
+                        value={item.unit_cost || 0}
                         onChange={(e) => updateItem(item, 'unit_cost', parseFloat(e.target.value))}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
                         min="0"
@@ -220,8 +222,8 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
                       <label className="block text-sm font-medium text-gray-700 mb-1">Price (Client)</label>
                       <input
                         type="number"
-                        value={item.price}
-                        onChange={(e) => updateItem(item, 'price', parseFloat(e.target.value))}
+                        value={item.client_unit_price || 0}
+                        onChange={(e) => updateItem(item, 'client_unit_price', parseFloat(e.target.value))}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 bg-gray-50 focus:border-blue-500 focus:outline-none"
                         min="0"
                         step="0.01"
@@ -232,7 +234,7 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
                       <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                       <input
                         type="text"
-                        value={item.notes}
+                        value={item.notes || ''}
                         onChange={(e) => updateItem(item, 'notes', e.target.value)}
                         className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
                         placeholder="Additional notes..."
