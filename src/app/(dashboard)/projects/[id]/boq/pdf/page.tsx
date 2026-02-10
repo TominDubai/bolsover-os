@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServerClient } from '@supabase/ssr'
 import { redirect } from 'next/navigation'
 import { BOQPDFManager } from '@/components/BOQPDFManager'
 
@@ -9,7 +10,7 @@ interface BOQPDFPageProps {
 }
 
 export default async function BOQPDFPage({ params }: BOQPDFPageProps) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
