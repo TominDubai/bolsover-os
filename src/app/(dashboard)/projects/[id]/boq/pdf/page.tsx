@@ -10,6 +10,7 @@ interface BOQPDFPageProps {
 }
 
 export default async function BOQPDFPage({ params }: BOQPDFPageProps) {
+  const projectId = params.id
   const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
@@ -20,23 +21,23 @@ export default async function BOQPDFPage({ params }: BOQPDFPageProps) {
   const { data: project } = await supabase
     .from('projects')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', projectId)
     .single()
 
   if (!project) {
-    redirect(`/projects/${params.id}`)
+    redirect(`/projects`)
   }
 
   const { data: boqPdfs } = await supabase
     .from('boq_pdfs')
     .select('*')
-    .eq('project_id', params.id)
+    .eq('project_id', projectId)
     .order('version', { ascending: false })
 
   const { data: editRequests } = await supabase
     .from('boq_edit_requests')
     .select('*')
-    .eq('project_id', params.id)
+    .eq('project_id', projectId)
     .order('requested_at', { ascending: false })
 
   return (
@@ -51,7 +52,7 @@ export default async function BOQPDFPage({ params }: BOQPDFPageProps) {
           </div>
           
           <BOQPDFManager 
-            projectId={params.id} 
+            projectId={projectId} 
             boqPdfs={boqPdfs || []} 
             editRequests={editRequests || []}
             currentUser={user}
