@@ -63,12 +63,15 @@ export function GanttChart({ phases, projectStart, projectEnd }: GanttChartProps
     const start = new Date(phase.start_date)
     const end = new Date(phase.end_date)
     
-    const leftPercent = (differenceInDays(start, timelineStart) / totalDays) * 100
-    const widthPercent = ((differenceInDays(end, start) + 1) / totalDays) * 100
+    const weekWidth = 100
+    const totalWidth = weeks.length * weekWidth
+    
+    const leftPx = (differenceInDays(start, timelineStart) / totalDays) * totalWidth
+    const widthPx = ((differenceInDays(end, start) + 1) / totalDays) * totalWidth
     
     return {
-      left: `${Math.max(0, leftPercent)}%`,
-      width: `${Math.min(100 - leftPercent, widthPercent)}%`,
+      left: `${Math.max(0, leftPx)}px`,
+      width: `${Math.max(20, Math.min(totalWidth - leftPx, widthPx))}px`,
     }
   }
 
@@ -76,8 +79,11 @@ export function GanttChart({ phases, projectStart, projectEnd }: GanttChartProps
     const today = new Date()
     const daysDiff = differenceInDays(today, timelineStart)
     if (daysDiff < 0 || daysDiff > totalDays) return null
-    return `${(daysDiff / totalDays) * 100}%`
-  }, [timelineStart, totalDays])
+    // Return pixel position for the timeline
+    const weekWidth = 100
+    const totalWidth = weeks.length * weekWidth
+    return `${(daysDiff / totalDays) * totalWidth}px`
+  }, [timelineStart, totalDays, weeks.length])
 
   if (phases.length === 0) {
     return (
@@ -87,20 +93,23 @@ export function GanttChart({ phases, projectStart, projectEnd }: GanttChartProps
     )
   }
 
+  const weekWidth = 100 // pixels per week
+  const timelineWidth = weeks.length * weekWidth
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       {/* Header with weeks */}
       <div className="flex border-b border-gray-200">
-        <div className="w-48 flex-shrink-0 px-4 py-2 bg-gray-50 border-r border-gray-200 font-medium text-sm text-gray-700">
+        <div className="w-52 flex-shrink-0 px-4 py-2 bg-gray-50 border-r border-gray-200 font-medium text-sm text-gray-700 sticky left-0 z-20">
           Phase
         </div>
-        <div className="flex-1 relative">
-          <div className="flex">
+        <div className="overflow-x-auto flex-1">
+          <div className="flex" style={{ width: `${timelineWidth}px` }}>
             {weeks.map((week, i) => (
               <div 
                 key={i} 
-                className="flex-1 px-2 py-2 text-xs text-gray-500 text-center border-r border-gray-100 bg-gray-50"
-                style={{ minWidth: '80px' }}
+                className="px-2 py-2 text-xs text-gray-500 text-center border-r border-gray-100 bg-gray-50"
+                style={{ width: `${weekWidth}px`, flexShrink: 0 }}
               >
                 {format(week, 'MMM d')}
               </div>
@@ -109,68 +118,72 @@ export function GanttChart({ phases, projectStart, projectEnd }: GanttChartProps
         </div>
       </div>
 
-      {/* Phases */}
-      <div className="relative">
-        {phases.map((phase) => {
-          const barStyle = getBarStyle(phase)
-          
-          return (
-            <div key={phase.id} className="flex border-b border-gray-100 hover:bg-gray-50">
-              {/* Phase name */}
-              <div className="w-48 flex-shrink-0 px-4 py-3 border-r border-gray-200">
-                <div className="text-sm font-medium text-gray-900 truncate">{phase.name}</div>
-                <div className="text-xs text-gray-500">
-                  {phase.start_date && phase.end_date 
-                    ? `${format(new Date(phase.start_date), 'MMM d')} - ${format(new Date(phase.end_date), 'MMM d')}`
-                    : 'No dates set'
-                  }
-                </div>
-              </div>
-              
-              {/* Timeline bar */}
-              <div className="flex-1 relative py-3 px-2">
-                {/* Grid lines */}
-                <div className="absolute inset-0 flex">
-                  {weeks.map((_, i) => (
-                    <div key={i} className="flex-1 border-r border-gray-100" style={{ minWidth: '80px' }} />
-                  ))}
+      {/* Scrollable container for phases */}
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: `${208 + timelineWidth}px` }}>
+          {/* Phases */}
+          {phases.map((phase) => {
+            const barStyle = getBarStyle(phase)
+            
+            return (
+              <div key={phase.id} className="flex border-b border-gray-100 hover:bg-gray-50">
+                {/* Phase name - sticky */}
+                <div className="w-52 flex-shrink-0 px-4 py-3 border-r border-gray-200 bg-white sticky left-0 z-10">
+                  <div className="text-sm font-medium text-gray-900 truncate">{phase.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {phase.start_date && phase.end_date 
+                      ? `${format(new Date(phase.start_date), 'MMM d')} - ${format(new Date(phase.end_date), 'MMM d')}`
+                      : 'No dates set'
+                    }
+                  </div>
                 </div>
                 
-                {/* Phase bar */}
-                {barStyle && (
-                  <div
-                    className={`absolute top-3 h-8 rounded ${STATUS_COLORS[phase.status]} shadow-sm`}
-                    style={barStyle}
-                  >
-                    {/* Progress fill */}
-                    <div 
-                      className="absolute inset-0 bg-black/20 rounded-l"
-                      style={{ width: `${phase.progress_percent}%` }}
-                    />
-                    {/* Label */}
-                    <div className="absolute inset-0 flex items-center px-2">
-                      <span className="text-xs font-medium text-white truncate">
-                        {phase.progress_percent}%
-                      </span>
-                    </div>
+                {/* Timeline bar */}
+                <div className="relative py-3" style={{ width: `${timelineWidth}px` }}>
+                  {/* Grid lines */}
+                  <div className="absolute inset-0 flex">
+                    {weeks.map((_, i) => (
+                      <div 
+                        key={i} 
+                        className="border-r border-gray-100" 
+                        style={{ width: `${weekWidth}px`, flexShrink: 0 }} 
+                      />
+                    ))}
                   </div>
-                )}
+                  
+                  {/* Phase bar */}
+                  {barStyle && (
+                    <div
+                      className={`absolute top-3 h-8 rounded ${STATUS_COLORS[phase.status]} shadow-sm cursor-pointer hover:opacity-90`}
+                      style={barStyle}
+                      title={`${phase.name}: ${phase.progress_percent}%`}
+                    >
+                      {/* Progress fill */}
+                      <div 
+                        className="absolute inset-0 bg-black/20 rounded-l"
+                        style={{ width: `${phase.progress_percent}%` }}
+                      />
+                      {/* Label */}
+                      <div className="absolute inset-0 flex items-center px-2">
+                        <span className="text-xs font-medium text-white truncate">
+                          {phase.progress_percent}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Today line */}
+                  {todayPosition && (
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 pointer-events-none"
+                      style={{ left: todayPosition }}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
-          )
-        })}
-
-        {/* Today line */}
-        {todayPosition && (
-          <div 
-            className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
-            style={{ left: `calc(192px + ${todayPosition})` }}
-          >
-            <div className="absolute -top-1 -left-2 px-1 bg-red-500 text-white text-xs rounded">
-              Today
-            </div>
-          </div>
-        )}
+            )
+          })}
+        </div>
       </div>
 
       {/* Legend */}
@@ -191,6 +204,10 @@ export function GanttChart({ phases, projectStart, projectEnd }: GanttChartProps
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 rounded bg-red-500" />
           <span className="text-gray-600">Delayed</span>
+        </div>
+        <div className="flex items-center gap-1 ml-4">
+          <div className="w-3 h-0.5 bg-red-500" />
+          <span className="text-gray-600">Today</span>
         </div>
       </div>
     </div>
