@@ -82,7 +82,7 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
     
     // Auto-calculate client price if unit_cost changes
     if (field === 'unit_cost' || field === 'quantity') {
-      updatedItem.client_unit_price = updatedItem.unit_cost * updatedItem.quantity
+      updatedItem.client_unit_price = (updatedItem.unit_cost || 0) * (updatedItem.quantity || 0)
     }
 
     const { error } = await supabase
@@ -91,9 +91,10 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
       .eq('id', item.id)
 
     if (!error) {
-      setCategories(categories.map(cat => 
-        cat.items.map(i => i.id === item.id ? updatedItem : i)
-      ))
+      setCategories(categories.map(cat => ({
+        ...cat,
+        items: cat.items.map(i => i.id === item.id ? updatedItem : i)
+      })))
     }
   }
 
@@ -106,7 +107,7 @@ export function EditBOQForm({ projectId, boq, categories: initialCategories }: E
 
     if (!error) {
       setCategories(categories.map(cat => 
-        { ...cat, items: cat.items.filter(i => i.id !== itemId) }
+        ({ ...cat, items: cat.items.filter(i => i.id !== itemId) })
       ))
     }
   }

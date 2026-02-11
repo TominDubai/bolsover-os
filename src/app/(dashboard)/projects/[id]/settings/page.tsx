@@ -9,7 +9,7 @@ interface SettingsPageProps {
 }
 
 export default async function SettingsPage({ params }: SettingsPageProps) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {

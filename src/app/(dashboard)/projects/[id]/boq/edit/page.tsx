@@ -10,7 +10,7 @@ interface EditBOQPageProps {
 }
 
 export default async function EditBOQPage({ params }: EditBOQPageProps) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {

@@ -9,7 +9,7 @@ interface UploadDocumentPageProps {
 }
 
 export default async function UploadDocumentPage({ params }: UploadDocumentPageProps) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {

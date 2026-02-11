@@ -59,16 +59,14 @@ export function UploadDocumentForm({ projectId }: UploadDocumentFormProps) {
       const fileName = `${Date.now()}-${file.name}`
       const filePath = `${projectId}/${fileName}`
 
-      // Upload file with progress tracking
+      // Upload file
       const { error: uploadError } = await supabase.storage
         .from('project-documents')
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: false,
-          onUploadProgress: (progress) => {
-            setUploadProgress(progress.loaded / progress.total)
-          }
+          upsert: false
         })
+      setUploadProgress(1)
 
       if (uploadError) throw uploadError
 

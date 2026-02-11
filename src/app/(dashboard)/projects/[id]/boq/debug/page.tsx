@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { notFound } from 'next/navigation'
 
 export default async function TestBOQPage({ params }: { params: { id: string, boqId: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
