@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#1e40af"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bolsover.site"
@@ -35,7 +37,9 @@
         {
           "photosPermission": "Allow Bolsover Site to access photos for daily reports"
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ]
   }
 }
