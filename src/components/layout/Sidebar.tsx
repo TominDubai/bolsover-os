@@ -2,18 +2,19 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { 
-  LayoutDashboard, 
-  FolderKanban, 
-  Users, 
-  Building2, 
-  FileText, 
+import {
+  LayoutDashboard,
+  FolderKanban,
+  Users,
+  Building2,
+  FileText,
   Calendar,
   Settings,
   HardHat,
   ClipboardList,
   Bell,
-  X
+  X,
+  Bot
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Enquiries', href: '/enquiries', icon: ClipboardList },
   { name: 'Clients', href: '/clients', icon: Users },
   { name: 'Subcontractors', href: '/subcontractors', icon: HardHat },
+  { name: 'AI Assistant', href: '/assistant', icon: Bot },
 ]
 
 const secondaryNavigation = [
