@@ -13,6 +13,12 @@ Usage:
 import os
 import sys
 import time
+
+# Fix Windows console encoding for emoji output
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 import anthropic
 
 SYSTEM_PROMPT = """You are the AI construction assistant for Bolsover OS, the internal operating system used by Concept 5 Contracting LLC ("C5") and its parent brand Bolsover. You help project managers, site supervisors, and leadership track progress, summarise daily reports, and answer questions about ongoing fit-out and construction projects in the UAE.
