@@ -13,9 +13,12 @@ import {
   ChevronRight,
   Users,
   Bell,
-  X
+  X,
+  List,
+  BarChart3
 } from 'lucide-react'
 import Link from 'next/link'
+import { GanttChart } from '@/components/GanttChart'
 
 interface ScheduleTabProps {
   projectId: string
@@ -67,6 +70,7 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set())
   const [newTaskText, setNewTaskText] = useState<Record<string, string>>({})
   const [addingTask, setAddingTask] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'gantt'>('list')
   
   // Delay Notice Modal State
   const [showDelayModal, setShowDelayModal] = useState(false)
@@ -311,13 +315,22 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
         <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">No Schedule Created</h3>
         <p className="text-gray-500 mb-6">Create a project schedule to track phases and tasks</p>
-        <Link
-          href={`/projects/${projectId}/schedule/new`}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" />
-          Create Schedule
-        </Link>
+        <div className="flex items-center justify-center gap-3">
+          <Link
+            href={`/projects/${projectId}/schedule/new`}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Create Schedule
+          </Link>
+          <Link
+            href={`/projects/${projectId}/schedule/import`}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Calendar className="h-4 w-4" />
+            Import from Primavera
+          </Link>
+        </div>
       </div>
     )
   }
@@ -330,11 +343,34 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
     <div className="space-y-6">
       {/* Schedule Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">
-              {formatDate(schedule.start_date)} → {formatDate(schedule.end_date)}
-            </span>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-500">
+            {formatDate(schedule.start_date)} → {formatDate(schedule.end_date)}
+          </span>
+          {/* View Toggle */}
+          <div className="flex items-center rounded-lg border border-gray-200 p-0.5">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === 'list' 
+                  ? 'bg-gray-900 text-white' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <List className="h-4 w-4" />
+              List
+            </button>
+            <button
+              onClick={() => setViewMode('gantt')}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === 'gantt' 
+                  ? 'bg-gray-900 text-white' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <BarChart3 className="h-4 w-4" />
+              Gantt
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -345,6 +381,12 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
             <Bell className="h-4 w-4" />
             Send Delay Notice
           </button>
+          <Link
+            href={`/projects/${projectId}/schedule/import`}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Import
+          </Link>
           <Link
             href={`/projects/${projectId}/schedule/edit`}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -372,7 +414,18 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
         </div>
       </div>
 
-      {/* Phases */}
+      {/* Gantt Chart View */}
+      {viewMode === 'gantt' && (
+        <GanttChart 
+          phases={phases} 
+          projectStart={schedule.start_date} 
+          projectEnd={schedule.end_date} 
+        />
+      )}
+
+      {/* List View - Phases */}
+      {viewMode === 'list' && (
+      <>
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         {phases.length > 0 ? (
           phases.map((phase) => {
@@ -532,6 +585,8 @@ export function ScheduleTab({ projectId }: ScheduleTabProps) {
           Add Phase
         </button>
       </div>
+      </>
+      )}
 
       {/* Delay Notice Modal */}
       {showDelayModal && (
