@@ -12,7 +12,7 @@ const SubcontractorsApp = (() => {
         function parseField() {
             if (i >= len || text[i] === '\n' || text[i] === '\r') return '';
             if (text[i] === '"') {
-                i++; // skip opening quote
+                i++;
                 let val = '';
                 while (i < len) {
                     if (text[i] === '"') {
@@ -20,7 +20,7 @@ const SubcontractorsApp = (() => {
                             val += '"';
                             i += 2;
                         } else {
-                            i++; // skip closing quote
+                            i++;
                             break;
                         }
                     } else {
@@ -43,7 +43,6 @@ const SubcontractorsApp = (() => {
                 if (i < len && text[i] === ',') { i++; continue; }
                 break;
             }
-            // skip line ending
             if (i < len && text[i] === '\r') i++;
             if (i < len && text[i] === '\n') i++;
             rows.push(row);
@@ -55,14 +54,12 @@ const SubcontractorsApp = (() => {
         if (!raw || !raw.trim()) return null;
         let t = raw.trim().toLowerCase();
         t = t.replace(/\s*(works?|package)\s*$/i, '').trim();
-        // Take first meaningful word(s) for known multi-word trades
         if (t.includes('glass') || t.includes('aluminum') || t.includes('aluminium')) return 'glass';
         if (t.includes('gypsum')) return 'gypsum';
         if (t.includes('landscap') || t.includes('pool')) return 'landscaping';
         if (t.includes('wall clad')) return 'wall cladding';
         if (t.includes('wall finish')) return 'wall finishes';
         if (t.includes('garage')) return 'garage door';
-        // General single-word trades
         const first = t.split(/[\/\s]/)[0];
         return first || null;
     }
@@ -88,16 +85,12 @@ const SubcontractorsApp = (() => {
                 });
             }
             const rec = map.get(key);
-            // Fill blanks from later rows
             if (!rec.contact_name && contact) rec.contact_name = contact;
             if (!rec.phone && phone) rec.phone = phone.split('/')[0].trim();
             if (!rec.email && email) rec.email = email.split('/')[0].trim();
-            // Clean phone: strip commas and formatting artifacts (e.g. "501,138,666.00" → "501138666")
             if (rec.phone) rec.phone = rec.phone.replace(/[,.\s]/g, '').replace(/\.00$/, '');
-            // Merge trade
             const norm = normalizeTrade(trade);
             if (norm && !rec.trades.includes(norm)) rec.trades.push(norm);
-            // Build notes from location + remarks
             const parts = [];
             if (location && !rec.notes.includes(location)) parts.push(location);
             if (remarks && !rec.notes.includes(remarks)) parts.push(remarks);
@@ -154,14 +147,12 @@ const SubcontractorsApp = (() => {
     }
 
     async function importToSupabase(records) {
-        // Upsert: delete existing matches by company name, then insert fresh
         const names = records.map(r => r.company_name);
         const { error: delErr } = await SupabaseClient.from('subcontractors')
             .delete()
             .in('company_name', names);
         if (delErr) throw delErr;
 
-        // Insert in batches of 50
         const batch = 50;
         for (let i = 0; i < records.length; i += batch) {
             const chunk = records.slice(i, i + batch);
@@ -180,7 +171,6 @@ const SubcontractorsApp = (() => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 const allRows = parseCSV(e.target.result);
-                // Data starts at row 9 (index 8), skip header rows 1-5, col headers row 6, blanks 7-8
                 const dataRows = allRows.slice(8).filter(r => r.length >= 3 && r[2] && r[2].trim());
                 const grouped = groupByCompany(dataRows);
                 if (grouped.length === 0) {
@@ -220,12 +210,12 @@ const SubcontractorsApp = (() => {
 
             if (error) throw error;
 
-            // Collect all unique trades
             const allTrades = [...new Set((subs || []).flatMap(s => s.trades || []))].sort();
 
             body.innerHTML = `
                 <div class="app-toolbar">
                     <input type="text" class="app-search" placeholder="Search subcontractors..." id="sub-search">
+                    <button class="import-btn" id="sub-new-btn">+ Add Subcontractor</button>
                     <button class="import-btn" id="csv-import-btn">Import CSV</button>
                     <input type="file" id="csv-file-input" accept=".csv" style="display:none">
                     <div class="trade-filters" id="trade-filters">
@@ -253,9 +243,11 @@ const SubcontractorsApp = (() => {
             const filters = body.querySelector('#trade-filters');
             let activeTrade = 'all';
 
+            body.querySelector('#sub-new-btn').addEventListener('click', () => showForm(win));
+
             function render(list) {
                 tbody.innerHTML = list.length > 0 ? list.map(s => `
-                    <tr>
+                    <tr class="clickable-row" data-id="${s.id}">
                         <td class="strong">${s.company_name || '—'}</td>
                         <td>${s.contact_name || '—'}</td>
                         <td>${s.phone || '—'}</td>
@@ -264,6 +256,13 @@ const SubcontractorsApp = (() => {
                         <td>${s.jobs_completed || 0}</td>
                     </tr>
                 `).join('') : '<tr><td colspan="6" class="empty-row">No subcontractors found</td></tr>';
+
+                tbody.querySelectorAll('.clickable-row').forEach(row => {
+                    row.addEventListener('click', () => {
+                        const sub = (subs || []).find(s => s.id === row.dataset.id);
+                        if (sub) showDetail(win, sub);
+                    });
+                });
             }
 
             function applyFilters() {
@@ -301,6 +300,160 @@ const SubcontractorsApp = (() => {
         } catch (err) {
             body.innerHTML = `<div class="app-error">Failed to load subcontractors: ${err.message}</div>`;
         }
+    }
+
+    async function showDetail(win, sub) {
+        const body = win.querySelector('.app-container');
+
+        body.innerHTML = `
+            <div class="detail-view">
+                <div class="detail-header">
+                    <button class="back-btn" id="sub-back">← Back</button>
+                    <h2>${sub.company_name}</h2>
+                    <button class="btn-edit" id="sub-edit-btn">Edit</button>
+                </div>
+                <div class="detail-grid">
+                    <div class="detail-section">
+                        <h4>Contact Details</h4>
+                        <div class="detail-fields">
+                            <div class="field"><span class="field-label">Contact Name</span><span class="field-value">${sub.contact_name || '—'}</span></div>
+                            <div class="field"><span class="field-label">Phone</span><span class="field-value">${sub.phone || '—'}</span></div>
+                            <div class="field"><span class="field-label">Email</span><span class="field-value">${sub.email || '—'}</span></div>
+                        </div>
+                    </div>
+                    <div class="detail-section">
+                        <h4>Work</h4>
+                        <div class="detail-fields">
+                            <div class="field"><span class="field-label">Trades</span><span class="field-value trades-cell">${(sub.trades || []).map(t => Utils.tradeBadge(t)).join(' ') || '—'}</span></div>
+                            <div class="field"><span class="field-label">Rating</span><span class="field-value rating-cell">${Utils.ratingStars(sub.rating)}</span></div>
+                            <div class="field"><span class="field-label">Jobs Completed</span><span class="field-value">${sub.jobs_completed || 0}</span></div>
+                            ${sub.notes ? `<div class="field full-width"><span class="field-label">Notes</span><span class="field-value">${sub.notes}</span></div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        body.querySelector('#sub-back').addEventListener('click', () => loadSubcontractors(win));
+        body.querySelector('#sub-edit-btn').addEventListener('click', () => showForm(win, sub));
+    }
+
+    async function showForm(win, existing) {
+        const body = win.querySelector('.app-container');
+        const isEdit = !!existing;
+        const s = existing || {};
+
+        body.innerHTML = `
+            <div class="form-view">
+                <div class="form-header">
+                    <button class="back-btn" id="sub-form-back">← Back</button>
+                    <h2>${isEdit ? 'Edit Subcontractor' : 'New Subcontractor'}</h2>
+                </div>
+                <div class="form-body">
+                    <div class="form-section">
+                        <h4>Company Details</h4>
+                        <div class="form-grid">
+                            <div class="form-group full">
+                                <label>Company Name *</label>
+                                <input type="text" id="f-company" value="${s.company_name || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Contact Name</label>
+                                <input type="text" id="f-contact" value="${s.contact_name || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Phone</label>
+                                <input type="text" id="f-phone" value="${s.phone || ''}">
+                            </div>
+                            <div class="form-group full">
+                                <label>Email</label>
+                                <input type="email" id="f-email" value="${s.email || ''}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h4>Work</h4>
+                        <div class="form-grid">
+                            <div class="form-group full">
+                                <label>Trades (comma-separated)</label>
+                                <input type="text" id="f-trades" value="${(s.trades || []).join(', ')}" placeholder="e.g. electrical, plumbing, ac">
+                            </div>
+                            <div class="form-group">
+                                <label>Rating (1-5)</label>
+                                <input type="number" id="f-rating" min="1" max="5" step="0.5" value="${s.rating || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Jobs Completed</label>
+                                <input type="number" id="f-jobs" min="0" value="${s.jobs_completed || 0}">
+                            </div>
+                            <div class="form-group full">
+                                <label>Notes</label>
+                                <textarea id="f-notes">${s.notes || ''}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="sub-form-error"></div>
+                </div>
+                <div class="form-actions">
+                    <button class="back-btn" id="sub-form-cancel">Cancel</button>
+                    <button class="btn-save" id="sub-form-save">${isEdit ? 'Save Changes' : 'Add Subcontractor'}</button>
+                </div>
+            </div>
+        `;
+
+        const goBack = () => loadSubcontractors(win);
+        body.querySelector('#sub-form-back').addEventListener('click', goBack);
+        body.querySelector('#sub-form-cancel').addEventListener('click', goBack);
+
+        body.querySelector('#sub-form-save').addEventListener('click', async () => {
+            const btn = body.querySelector('#sub-form-save');
+            const errEl = body.querySelector('#sub-form-error');
+            errEl.innerHTML = '';
+
+            const companyName = body.querySelector('#f-company').value.trim();
+            if (!companyName) {
+                errEl.innerHTML = '<div class="form-error">Company name is required</div>';
+                return;
+            }
+
+            const tradesRaw = body.querySelector('#f-trades').value;
+            const trades = tradesRaw
+                .split(',')
+                .map(t => t.trim().toLowerCase())
+                .filter(Boolean);
+
+            const ratingVal = body.querySelector('#f-rating').value;
+
+            const record = {
+                company_name: companyName,
+                contact_name: body.querySelector('#f-contact').value.trim() || null,
+                phone: body.querySelector('#f-phone').value.trim() || null,
+                email: body.querySelector('#f-email').value.trim() || null,
+                trades,
+                rating: ratingVal ? parseFloat(ratingVal) : null,
+                jobs_completed: parseInt(body.querySelector('#f-jobs').value) || 0,
+                notes: body.querySelector('#f-notes').value.trim() || null,
+                is_active: true,
+            };
+
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                let result;
+                if (isEdit) {
+                    result = await SupabaseClient.from('subcontractors').update(record).eq('id', s.id);
+                } else {
+                    result = await SupabaseClient.from('subcontractors').insert(record);
+                }
+                if (result.error) throw result.error;
+                await loadSubcontractors(win);
+            } catch (err) {
+                errEl.innerHTML = `<div class="form-error">Error: ${err.message}</div>`;
+                btn.disabled = false;
+                btn.textContent = isEdit ? 'Save Changes' : 'Add Subcontractor';
+            }
+        });
     }
 
     return { id: 'subcontractors', name: 'Subcontractors', icon: ICON, launch };

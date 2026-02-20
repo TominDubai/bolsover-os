@@ -1,15 +1,6 @@
 const SettingsApp = (() => {
     const ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
 
-    const wallpapers = [
-        { name: 'Default Dark', color: '#1a1a2e' },
-        { name: 'Ocean', gradient: 'linear-gradient(135deg, #0c3547, #1a1a2e, #2d1b4e)' },
-        { name: 'Sunset', gradient: 'linear-gradient(135deg, #2d1b4e, #4a1942, #1a1a2e)' },
-        { name: 'Forest', gradient: 'linear-gradient(135deg, #1a2e1a, #1a1a2e, #0c3547)' },
-        { name: 'Midnight', gradient: 'linear-gradient(135deg, #0a0a1a, #1a1a2e, #0a1628)' },
-        { name: 'Aurora', gradient: 'linear-gradient(135deg, #0c3547, #1a4a3a, #2d1b4e, #1a1a2e)' },
-    ];
-
     const accentColors = [
         { name: 'Red', value: '#e94560' },
         { name: 'Blue', value: '#4a9eff' },
@@ -24,11 +15,6 @@ const SettingsApp = (() => {
     async function launch() {
         const user = await SupabaseClient.getUser();
 
-        let wallpaperHTML = wallpapers.map((w, i) => {
-            const bg = w.gradient || w.color;
-            return `<div class="wallpaper-option ${i === 0 ? 'active' : ''}" data-index="${i}" style="background:${bg}" title="${w.name}"></div>`;
-        }).join('');
-
         let colorHTML = accentColors.map((c, i) => {
             return `<div class="color-option ${i === 0 ? 'active' : ''}" data-color="${c.value}" style="background:${c.value}" title="${c.name}"></div>`;
         }).join('');
@@ -42,9 +28,6 @@ const SettingsApp = (() => {
                     </div>
                 ` : ''}
 
-                <h3>Wallpaper</h3>
-                <div class="settings-group" id="wallpaper-options">${wallpaperHTML}</div>
-
                 <h3>Accent Color</h3>
                 <div class="settings-group" id="color-options">${colorHTML}</div>
             </div>
@@ -53,18 +36,6 @@ const SettingsApp = (() => {
         WindowManager.createWindow('settings', 'Settings', html, {
             width: 420, height: 420,
             onReady: (win) => {
-                win.querySelectorAll('.wallpaper-option').forEach(opt => {
-                    opt.addEventListener('click', () => {
-                        win.querySelectorAll('.wallpaper-option').forEach(o => o.classList.remove('active'));
-                        opt.classList.add('active');
-                        const w = wallpapers[parseInt(opt.dataset.index)];
-                        const desktop = document.getElementById('desktop');
-                        desktop.style.background = w.gradient || w.color;
-                        desktop.style.backgroundSize = 'cover';
-                        localStorage.setItem('bolsover-wallpaper', JSON.stringify(w));
-                    });
-                });
-
                 win.querySelectorAll('.color-option').forEach(opt => {
                     opt.addEventListener('click', () => {
                         win.querySelectorAll('.color-option').forEach(o => o.classList.remove('active'));
@@ -78,12 +49,6 @@ const SettingsApp = (() => {
     }
 
     function loadSavedSettings() {
-        const wallpaper = localStorage.getItem('bolsover-wallpaper');
-        if (wallpaper) {
-            const w = JSON.parse(wallpaper);
-            const desktop = document.getElementById('desktop');
-            desktop.style.background = w.gradient || w.color;
-        }
         const accent = localStorage.getItem('bolsover-accent');
         if (accent) {
             document.documentElement.style.setProperty('--accent', accent);

@@ -36,12 +36,15 @@ const ClientsApp = (() => {
             body.innerHTML = `
                 <div class="app-toolbar">
                     <input type="text" class="app-search" placeholder="Search clients..." id="client-search">
+                    <button class="import-btn" id="client-new-btn">+ New Client</button>
                 </div>
                 <div class="client-grid" id="client-grid"></div>
             `;
 
             const grid = body.querySelector('#client-grid');
             const search = body.querySelector('#client-search');
+
+            body.querySelector('#client-new-btn').addEventListener('click', () => showForm(win));
 
             function render(list) {
                 grid.innerHTML = list.length > 0 ? list.map(c => `
@@ -81,13 +84,12 @@ const ClientsApp = (() => {
     async function showClientDetail(win, client, projectCounts) {
         const body = win.querySelector('.app-container');
 
-        let projectsHTML = '<div class="app-loading">Loading projects...</div>';
-
         body.innerHTML = `
             <div class="detail-view">
                 <div class="detail-header">
-                    <button class="back-btn" id="client-back">← Back to Clients</button>
+                    <button class="back-btn" id="client-back">← Back</button>
                     <h2>${client.name}</h2>
+                    <button class="btn-edit" id="client-edit-btn">Edit</button>
                 </div>
                 <div class="detail-grid">
                     <div class="detail-section">
@@ -104,13 +106,14 @@ const ClientsApp = (() => {
                     </div>
                     <div class="detail-section">
                         <h4>Projects (${projectCounts[client.id] || 0})</h4>
-                        <div id="client-projects-list">${projectsHTML}</div>
+                        <div id="client-projects-list"><div class="app-loading">Loading projects...</div></div>
                     </div>
                 </div>
             </div>
         `;
 
         body.querySelector('#client-back').addEventListener('click', () => loadClients(win));
+        body.querySelector('#client-edit-btn').addEventListener('click', () => showForm(win, client));
 
         // Load client's projects
         try {
@@ -141,6 +144,123 @@ const ClientsApp = (() => {
         } catch (err) {
             body.querySelector('#client-projects-list').innerHTML = `<div class="app-error">Failed to load projects</div>`;
         }
+    }
+
+    async function showForm(win, existing) {
+        const body = win.querySelector('.app-container');
+        const isEdit = !!existing;
+        const c = existing || {};
+
+        body.innerHTML = `
+            <div class="form-view">
+                <div class="form-header">
+                    <button class="back-btn" id="client-form-back">← Back</button>
+                    <h2>${isEdit ? 'Edit Client' : 'New Client'}</h2>
+                </div>
+                <div class="form-body">
+                    <div class="form-section">
+                        <h4>Contact Details</h4>
+                        <div class="form-grid">
+                            <div class="form-group full">
+                                <label>Name *</label>
+                                <input type="text" id="f-name" value="${c.name || ''}" placeholder="Full name">
+                            </div>
+                            <div class="form-group">
+                                <label>Phone</label>
+                                <input type="text" id="f-phone" value="${c.phone || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" id="f-email" value="${c.email || ''}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h4>Location</h4>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Community</label>
+                                <input type="text" id="f-community" value="${c.community || ''}">
+                            </div>
+                            <div class="form-group">
+                                <label>Address</label>
+                                <input type="text" id="f-address" value="${c.address || ''}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h4>Other</h4>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Source</label>
+                                <select id="f-source">
+                                    <option value="">—</option>
+                                    ${['Referral', 'Website', 'Social Media', 'Walk-in', 'Repeat Client', 'Other'].map(s => `<option ${s === c.source ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Referred By</label>
+                                <input type="text" id="f-referred" value="${c.referred_by || ''}">
+                            </div>
+                            <div class="form-group full">
+                                <label>Notes</label>
+                                <textarea id="f-notes">${c.notes || ''}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="client-form-error"></div>
+                </div>
+                <div class="form-actions">
+                    <button class="back-btn" id="client-form-cancel">Cancel</button>
+                    <button class="btn-save" id="client-form-save">${isEdit ? 'Save Changes' : 'Create Client'}</button>
+                </div>
+            </div>
+        `;
+
+        const goBack = () => loadClients(win);
+        body.querySelector('#client-form-back').addEventListener('click', goBack);
+        body.querySelector('#client-form-cancel').addEventListener('click', goBack);
+
+        body.querySelector('#client-form-save').addEventListener('click', async () => {
+            const btn = body.querySelector('#client-form-save');
+            const errEl = body.querySelector('#client-form-error');
+            errEl.innerHTML = '';
+
+            const name = body.querySelector('#f-name').value.trim();
+            if (!name) {
+                errEl.innerHTML = '<div class="form-error">Name is required</div>';
+                return;
+            }
+
+            const record = {
+                name,
+                phone: body.querySelector('#f-phone').value.trim() || null,
+                email: body.querySelector('#f-email').value.trim() || null,
+                community: body.querySelector('#f-community').value.trim() || null,
+                address: body.querySelector('#f-address').value.trim() || null,
+                source: body.querySelector('#f-source').value || null,
+                referred_by: body.querySelector('#f-referred').value.trim() || null,
+                notes: body.querySelector('#f-notes').value.trim() || null,
+            };
+
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                let result;
+                if (isEdit) {
+                    result = await SupabaseClient.from('clients').update(record).eq('id', c.id);
+                } else {
+                    result = await SupabaseClient.from('clients').insert(record);
+                }
+                if (result.error) throw result.error;
+                await loadClients(win);
+            } catch (err) {
+                errEl.innerHTML = `<div class="form-error">Error: ${err.message}</div>`;
+                btn.disabled = false;
+                btn.textContent = isEdit ? 'Save Changes' : 'Create Client';
+            }
+        });
     }
 
     return { id: 'clients', name: 'Clients', icon: ICON, launch };

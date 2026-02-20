@@ -20,15 +20,17 @@ const DashboardApp = (() => {
     async function loadDashboard(win) {
         const body = win.querySelector('.app-container');
         try {
-            const [projectsRes, variationsRes, boqRes] = await Promise.all([
+            const [projectsRes, variationsRes, boqRes, invoicesRes] = await Promise.all([
                 SupabaseClient.from('projects').select('*, client:clients(name)'),
                 SupabaseClient.from('variations').select('id, amount, status, payment_status'),
                 SupabaseClient.from('boq').select('id, status'),
+                SupabaseClient.from('invoices').select('id, amount, paid_amount, status, due_date'),
             ]);
 
             const projects = projectsRes.data || [];
             const variations = variationsRes.data || [];
             const boqs = boqRes.data || [];
+            const invoices = invoicesRes.data || [];
 
             const pipeline = projects.filter(p => Utils.PIPELINE_STATUSES.includes(p.status));
             const active = projects.filter(p => Utils.ACTIVE_STATUSES.includes(p.status));
@@ -42,7 +44,37 @@ const DashboardApp = (() => {
 
             const pendingBoqs = boqs.filter(b => b.status === 'pending' || b.status === 'review');
 
+            // Invoice stats
+            const now = new Date();
+            const overdueInvoices = invoices.filter(i =>
+                (i.status === 'sent' || i.status === 'overdue') &&
+                i.due_date && new Date(i.due_date) < now
+            );
+            const overdueTotal = overdueInvoices.reduce((s, i) => s + ((i.amount || 0) - (i.paid_amount || 0)), 0);
+
+            const totalOutstanding = invoices
+                .filter(i => i.status !== 'cancelled' && i.status !== 'paid')
+                .reduce((s, i) => s + ((i.amount || 0) - (i.paid_amount || 0)), 0);
+
             const topActive = active.slice(0, 5);
+
+            // Attention items
+            let attentionHTML = '';
+            if (overdueInvoices.length > 0) {
+                attentionHTML += `<div class="attention-item warning"><span class="attention-icon">🚨</span><span>${overdueInvoices.length} overdue invoice${overdueInvoices.length > 1 ? 's' : ''} (${Utils.formatCurrencyShort(overdueTotal)})</span></div>`;
+            }
+            if (pendingBoqs.length > 0) {
+                attentionHTML += `<div class="attention-item warning"><span class="attention-icon">📋</span><span>${pendingBoqs.length} BOQ${pendingBoqs.length > 1 ? 's' : ''} pending approval</span></div>`;
+            }
+            if (unpaidVariations.length > 0) {
+                attentionHTML += `<div class="attention-item warning"><span class="attention-icon">💰</span><span>${unpaidVariations.length} unpaid variation${unpaidVariations.length > 1 ? 's' : ''} (${Utils.formatCurrencyShort(unpaidVariationTotal)})</span></div>`;
+            }
+            if (totalOutstanding > 0 && overdueInvoices.length === 0) {
+                attentionHTML += `<div class="attention-item warning"><span class="attention-icon">📄</span><span>${Utils.formatCurrencyShort(totalOutstanding)} outstanding across invoices</span></div>`;
+            }
+            if (!attentionHTML) {
+                attentionHTML = '<div class="attention-item ok"><span class="attention-icon">✅</span><span>All clear — nothing needs attention</span></div>';
+            }
 
             body.innerHTML = `
                 <div class="dash-stats">
@@ -61,21 +93,17 @@ const DashboardApp = (() => {
                         <div class="stat-value">${completed.length}</div>
                         <div class="stat-sub">All time</div>
                     </div>
-                    <div class="stat-card ${unpaidVariations.length > 0 ? 'warning' : ''}">
-                        <div class="stat-label">Unpaid Variations</div>
-                        <div class="stat-value">${unpaidVariations.length}</div>
-                        <div class="stat-sub">${Utils.formatCurrencyShort(unpaidVariationTotal)}</div>
+                    <div class="stat-card ${totalOutstanding > 0 ? 'warning' : ''}">
+                        <div class="stat-label">Outstanding</div>
+                        <div class="stat-value">${Utils.formatCurrencyShort(totalOutstanding)}</div>
+                        <div class="stat-sub">${overdueInvoices.length > 0 ? overdueInvoices.length + ' overdue' : 'All current'}</div>
                     </div>
                 </div>
 
                 <div class="dash-grid">
                     <div class="dash-section">
                         <h3>Needs Attention</h3>
-                        <div class="attention-list">
-                            ${pendingBoqs.length > 0 ? `<div class="attention-item warning"><span class="attention-icon">📋</span><span>${pendingBoqs.length} BOQ${pendingBoqs.length > 1 ? 's' : ''} pending approval</span></div>` : ''}
-                            ${unpaidVariations.length > 0 ? `<div class="attention-item warning"><span class="attention-icon">💰</span><span>${unpaidVariations.length} unpaid variation${unpaidVariations.length > 1 ? 's' : ''} (${Utils.formatCurrencyShort(unpaidVariationTotal)})</span></div>` : ''}
-                            ${pendingBoqs.length === 0 && unpaidVariations.length === 0 ? '<div class="attention-item ok"><span class="attention-icon">✅</span><span>All clear — nothing needs attention</span></div>' : ''}
-                        </div>
+                        <div class="attention-list">${attentionHTML}</div>
                     </div>
 
                     <div class="dash-section">
