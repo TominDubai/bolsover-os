@@ -30,6 +30,23 @@ const InvoicesApp = (() => {
         return `<span class="status-badge" style="background:rgba(255,255,255,0.06);color:var(--text-secondary)">${label}</span>`;
     }
 
+    const ZOHO_FUNC_URL = 'https://ckvprducwuhhnrkbzaoo.supabase.co/functions/v1/zoho-sync';
+
+    async function callZoho(action, data = {}) {
+        const session = await SupabaseClient.getSession();
+        const res = await fetch(ZOHO_FUNC_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token || ''}`,
+            },
+            body: JSON.stringify({ action, ...data }),
+        });
+        const result = await res.json();
+        if (!result.success) throw new Error(result.error || 'Zoho sync failed');
+        return result;
+    }
+
     async function launch() {
         const html = `
             <div class="app-container invoices">
@@ -355,7 +372,9 @@ const InvoicesApp = (() => {
                         <button id="inv-status-go">Update</button>
                     </div>
                     <button class="btn-edit" id="inv-edit-btn">Edit</button>
+                    <button class="btn-edit" id="inv-zoho-btn" style="background:rgba(40,167,69,0.15);color:#28a745">${inv.zoho_invoice_id ? 'Re-sync Zoho' : 'Sync to Zoho'}</button>
                 </div>
+                ${inv.zoho_invoice_id ? `<div style="padding:4px 0 8px;font-size:11px;color:var(--text-muted)">Zoho ID: ${inv.zoho_invoice_id} | Last sync: ${Utils.formatDate(inv.zoho_sync_at)}</div>` : ''}
                 <div class="detail-grid">
                     <div class="detail-section">
                         <h4>Invoice Details</h4>
@@ -411,6 +430,24 @@ const InvoicesApp = (() => {
 
         body.querySelector('#inv-back').addEventListener('click', () => loadList(win));
         body.querySelector('#inv-edit-btn').addEventListener('click', () => showEditForm(win, inv));
+
+        // Zoho sync
+        body.querySelector('#inv-zoho-btn').addEventListener('click', async () => {
+            const btn = body.querySelector('#inv-zoho-btn');
+            btn.disabled = true;
+            btn.textContent = 'Syncing...';
+            try {
+                const result = await callZoho('sync-invoice', { invoice_id: inv.id });
+                btn.textContent = `Synced (${result.action})`;
+                btn.style.color = '#28a745';
+                setTimeout(() => reloadDetail(win, inv.id), 1500);
+            } catch (err) {
+                btn.textContent = 'Sync Failed';
+                btn.style.color = '#dc3545';
+                alert('Zoho sync error: ' + err.message);
+                btn.disabled = false;
+            }
+        });
 
         // Status update
         body.querySelector('#inv-status-go').addEventListener('click', async () => {
@@ -628,6 +665,24 @@ const InvoicesApp = (() => {
                 if (invErr) throw invErr;
 
                 await syncProjectFinancials(inv.project_id);
+
+                // Auto-sync payment to Zoho if invoice is already synced
+                if (inv.zoho_invoice_id) {
+                    try {
+                        await callZoho('sync-payment', {
+                            payment: {
+                                invoice_id: inv.id,
+                                amount: payAmount,
+                                payment_date: body.querySelector('#f-pay-date').value || today,
+                                method: body.querySelector('#f-pay-method').value || null,
+                                reference: body.querySelector('#f-pay-ref').value.trim() || null,
+                            }
+                        });
+                    } catch (e) {
+                        console.warn('Zoho payment sync failed:', e.message);
+                    }
+                }
+
                 await reloadDetail(win, inv.id);
             } catch (err) {
                 errEl.innerHTML = `<div class="form-error">Error: ${err.message}</div>`;
