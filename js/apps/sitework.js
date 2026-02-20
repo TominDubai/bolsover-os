@@ -66,7 +66,7 @@ const SiteWorkApp = (() => {
                 </select>
                 <button class="import-btn" id="sw-new-btn">+ ${currentTab === 'logs' ? 'New Report' : 'New Snag'}</button>
             </div>
-            <div id="sw-content"><div class="app-loading">Loading...</div></div>
+            <div id="sw-content" style="flex:1;overflow:auto;min-height:0"><div class="app-loading">Loading...</div></div>
         `;
 
         const tabBtns = body.querySelectorAll('.sitework-tabs .trade-filter-btn');

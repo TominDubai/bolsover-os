@@ -68,9 +68,10 @@ const ScheduleApp = (() => {
                         ${Object.entries(PHASE_STATUSES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}
                     </select>
                     <button class="import-btn" id="sched-new-btn">+ New Phase</button>
+                    <button class="import-btn" id="sched-upload-btn">Upload Schedule</button>
                     <button class="btn-edit" id="sched-timeline-btn">Timeline View</button>
                 </div>
-                <div id="sched-content"></div>
+                <div id="sched-content" style="flex:1;overflow:auto;min-height:0"></div>
             `;
 
             const search = body.querySelector('#sched-search');
@@ -78,6 +79,7 @@ const ScheduleApp = (() => {
             const statusFilter = body.querySelector('#sched-status-filter');
 
             body.querySelector('#sched-new-btn').addEventListener('click', () => showPhaseForm(win, null, projects));
+            body.querySelector('#sched-upload-btn').addEventListener('click', () => showUploadForm(win, projects));
 
             let showingTimeline = false;
             body.querySelector('#sched-timeline-btn').addEventListener('click', () => {
@@ -137,56 +139,140 @@ const ScheduleApp = (() => {
                     container.innerHTML = '<div class="empty-state">No phases to display</div>';
                     return;
                 }
-                const dates = list.flatMap(p => [p.start_date, p.end_date].filter(Boolean)).map(d => new Date(d));
+                const dates = [];
+                list.forEach(p => {
+                    if (p.start_date) dates.push(new Date(p.start_date));
+                    if (p.end_date) dates.push(new Date(p.end_date));
+                    (p.tasks || []).forEach(t => {
+                        if (t.due_date) dates.push(new Date(t.due_date));
+                    });
+                });
                 if (dates.length === 0) {
                     container.innerHTML = '<div class="empty-state">No dates set on phases</div>';
                     return;
                 }
                 const minDate = new Date(Math.min(...dates));
                 const maxDate = new Date(Math.max(...dates));
-                const totalDays = Math.max(1, Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1);
+                const DAY = 86400000;
+                const totalDays = Math.max(1, Math.ceil((maxDate - minDate) / DAY) + 1);
 
                 const weeks = [];
-                const d = new Date(minDate);
-                while (d <= maxDate) {
-                    weeks.push(new Date(d));
-                    d.setDate(d.getDate() + 7);
+                const wd = new Date(minDate);
+                wd.setDate(wd.getDate() - wd.getDay() + 1);
+                while (wd <= maxDate) {
+                    weeks.push(new Date(wd));
+                    wd.setDate(wd.getDate() + 7);
+                }
+
+                const months = [];
+                const md = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+                while (md <= maxDate) {
+                    const mStart = new Date(Math.max(md, minDate));
+                    const mEnd = new Date(md.getFullYear(), md.getMonth() + 1, 0);
+                    const leftPct = ((mStart - minDate) / DAY) / totalDays * 100;
+                    const widthPct = (Math.min(mEnd, maxDate) - mStart) / DAY / totalDays * 100;
+                    months.push({ label: md.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), leftPct, widthPct });
+                    md.setMonth(md.getMonth() + 1);
+                }
+
+                const phaseColors = ['#e94560','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
+
+                function barCalc(startStr, endStr) {
+                    const s = startStr ? new Date(startStr) : minDate;
+                    const e = endStr ? new Date(endStr) : s;
+                    const left = ((s - minDate) / DAY) / totalDays * 100;
+                    const width = Math.max(0.5, ((e - s) / DAY + 1) / totalDays * 100);
+                    return { left, width };
                 }
 
                 container.innerHTML = `
                     <div class="timeline-wrap">
-                        <div class="timeline-header">
-                            <div class="timeline-label-col">Phase</div>
-                            <div class="timeline-bars-col">
+                        <div class="timeline-header" style="display:flex">
+                            <div class="timeline-label-col" style="display:flex;align-items:center;justify-content:space-between">
+                                <span>Activity</span>
+                                <button class="btn-edit" id="tl-toggle-all" style="font-size:10px;padding:2px 6px;height:auto">Collapse All</button>
+                            </div>
+                            <div class="timeline-bars-col" style="position:relative">
+                                <div style="display:flex;position:relative;height:16px">
+                                    ${months.map(m => `<div style="position:absolute;left:${m.leftPct}%;width:${m.widthPct}%;text-align:center;font-size:10px;font-weight:600;color:var(--text-secondary)">${m.label}</div>`).join('')}
+                                </div>
                                 <div class="timeline-weeks">
                                     ${weeks.map(w => `<div class="timeline-week">${w.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>`).join('')}
                                 </div>
                             </div>
                         </div>
                         <div class="timeline-body">
-                            ${list.map(p => {
-                                const start = p.start_date ? new Date(p.start_date) : minDate;
-                                const end = p.end_date ? new Date(p.end_date) : start;
-                                const leftPct = ((start - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
-                                const widthPct = Math.max(1, ((end - start) / (1000 * 60 * 60 * 24) + 1) / totalDays * 100);
-                                const colors = PHASE_STATUSES[p.status] || PHASE_STATUSES.pending;
+                            ${list.map((p, pi) => {
+                                const color = phaseColors[pi % phaseColors.length];
+                                const colorFaded = color + '33';
+                                const pb = barCalc(p.start_date, p.end_date);
+                                const tasks = p.tasks || [];
+                                const doneCount = tasks.filter(t => t.status === 'completed').length;
                                 return `
-                                    <div class="timeline-row">
-                                        <div class="timeline-label-col">
-                                            <div class="timeline-task-name">${p.name || '—'}</div>
-                                            <div class="timeline-task-sub">${p.project?.reference || ''}</div>
-                                        </div>
-                                        <div class="timeline-bars-col">
-                                            <div class="timeline-bar" style="left:${leftPct}%;width:${widthPct}%;background:${colors.bg};color:${colors.text}" title="${p.name}: ${Utils.formatDate(p.start_date)} — ${Utils.formatDate(p.end_date)}">
-                                                ${(p.tasks || []).filter(t => t.status === 'completed').length}/${(p.tasks || []).length}
+                                    <div class="tl-phase-header timeline-row" data-phase-idx="${pi}" style="background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer">
+                                        <div class="timeline-label-col" style="display:flex;align-items:center;gap:6px">
+                                            <span class="tl-chevron" style="font-size:10px;color:var(--text-muted);transition:transform 0.15s;display:inline-block">▼</span>
+                                            <div style="min-width:0">
+                                                <div class="timeline-task-name">${p.name || '—'}</div>
+                                                <div class="timeline-task-sub">${p.project?.reference || ''} ${statusBadge(p.status, PHASE_STATUSES)}</div>
                                             </div>
                                         </div>
+                                        <div class="timeline-bars-col">
+                                            <div class="timeline-bar" style="left:${pb.left}%;width:${pb.width}%;background:${color};color:#fff;font-weight:600;opacity:0.9" title="${p.name}: ${Utils.formatDate(p.start_date)} — ${Utils.formatDate(p.end_date)}">
+                                                ${doneCount}/${tasks.length}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="tl-phase-tasks" data-phase-idx="${pi}">
+                                        ${tasks.map(t => {
+                                            const tStart = t.start_date || t.due_date;
+                                            const tEnd = t.due_date || t.start_date;
+                                            const tb = barCalc(tStart, tEnd);
+                                            return `
+                                                <div class="timeline-row" style="min-height:28px">
+                                                    <div class="timeline-label-col" style="padding-left:24px">
+                                                        <div class="timeline-task-name" style="font-size:11px;font-weight:400;color:var(--text-secondary)" title="${t.name || ''}">${t.name || '—'}</div>
+                                                    </div>
+                                                    <div class="timeline-bars-col">
+                                                        <div class="timeline-bar" style="left:${tb.left}%;width:${Math.max(tb.width, 1)}%;background:${colorFaded};color:${color};border:1px solid ${color}40;height:16px;top:6px;border-radius:3px;font-size:9px;line-height:16px" title="${t.name}: ${Utils.formatDate(tStart)} — ${Utils.formatDate(tEnd)}"></div>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('')}
                                     </div>
                                 `;
                             }).join('')}
                         </div>
                     </div>
                 `;
+
+                // Collapsible phase toggles
+                let allCollapsed = false;
+                container.querySelectorAll('.tl-phase-header').forEach(header => {
+                    header.addEventListener('click', () => {
+                        const idx = header.dataset.phaseIdx;
+                        const tasksEl = container.querySelector(`.tl-phase-tasks[data-phase-idx="${idx}"]`);
+                        const chevron = header.querySelector('.tl-chevron');
+                        const isHidden = tasksEl.style.display === 'none';
+                        tasksEl.style.display = isHidden ? '' : 'none';
+                        chevron.style.transform = isHidden ? '' : 'rotate(-90deg)';
+                    });
+                });
+
+                const toggleAllBtn = container.querySelector('#tl-toggle-all');
+                if (toggleAllBtn) {
+                    toggleAllBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        allCollapsed = !allCollapsed;
+                        toggleAllBtn.textContent = allCollapsed ? 'Expand All' : 'Collapse All';
+                        container.querySelectorAll('.tl-phase-tasks').forEach(el => {
+                            el.style.display = allCollapsed ? 'none' : '';
+                        });
+                        container.querySelectorAll('.tl-chevron').forEach(ch => {
+                            ch.style.transform = allCollapsed ? 'rotate(-90deg)' : '';
+                        });
+                    });
+                }
             }
 
             function applyFilters() {
@@ -475,6 +561,429 @@ const ScheduleApp = (() => {
             } catch (err) {
                 errEl.innerHTML = `<div class="form-error">Error: ${err.message}</div>`;
                 btn.disabled = false; btn.textContent = isEdit ? 'Save Changes' : 'Add Task';
+            }
+        });
+    }
+
+    function parsePrimaveraDate(str) {
+        if (!str) return null;
+        str = String(str).trim();
+        // Handle DD-MMM-YY format (e.g. "23-Feb-26")
+        const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+        const m = str.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+        if (m) {
+            const day = parseInt(m[1], 10);
+            const mon = months[m[2].toLowerCase()];
+            let year = parseInt(m[3], 10);
+            if (year < 100) year += 2000;
+            if (mon !== undefined) {
+                const d = new Date(year, mon, day);
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            }
+        }
+        // Fallback: try native parse
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+        return null;
+    }
+
+    function derivePhaseName(letter, tasks) {
+        // For single-task groups, use the task name
+        if (tasks.length === 1) {
+            const name = tasks[0].name;
+            return name.length > 50 ? name.substring(0, 50) + '...' : name;
+        }
+        // Default: "Phase X (N tasks)" — user renames in preview
+        return `Phase ${letter}`;
+    }
+
+    async function showUploadForm(win, projects) {
+        const body = win.querySelector('.app-container');
+
+        body.innerHTML = `
+            <div class="form-view">
+                <div class="form-header">
+                    <button class="back-btn" id="upload-back">← Back</button>
+                    <h2>Upload Schedule</h2>
+                </div>
+                <div class="form-body">
+                    <div class="form-section">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Project *</label>
+                                <select id="upload-project">
+                                    <option value="">— Select project —</option>
+                                    ${projects.map(p => `<option value="${p.id}">${p.reference || 'Untitled'}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Excel File (.xlsx) *</label>
+                                <input type="file" id="upload-file" accept=".xlsx,.xls" style="height:auto;padding:8px 10px">
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                        <button class="import-btn" id="upload-parse-btn">Parse File</button>
+                    </div>
+                    <div id="upload-error"></div>
+                    <div id="upload-preview"></div>
+                </div>
+                <div class="form-actions" id="upload-actions" style="display:none">
+                    <button class="back-btn" id="upload-cancel">Cancel</button>
+                    <button class="btn-save" id="upload-import-btn">Import Schedule</button>
+                </div>
+            </div>
+        `;
+
+        let parsedPhases = null;
+
+        body.querySelector('#upload-back').addEventListener('click', () => loadList(win));
+        body.querySelector('#upload-cancel').addEventListener('click', () => loadList(win));
+
+        body.querySelector('#upload-parse-btn').addEventListener('click', () => {
+            const errEl = body.querySelector('#upload-error');
+            errEl.innerHTML = '';
+            const projectId = body.querySelector('#upload-project').value;
+            const fileInput = body.querySelector('#upload-file');
+
+            if (!projectId) { errEl.innerHTML = '<div class="form-error">Select a project</div>'; return; }
+            if (!fileInput.files.length) { errEl.innerHTML = '<div class="form-error">Select an Excel file</div>'; return; }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    if (rows.length < 3) { errEl.innerHTML = '<div class="form-error">File has too few rows</div>'; return; }
+
+                    // Auto-detect columns from first two header rows
+                    let codeCol = -1, nameCol = -1, startCol = -1, endCol = -1;
+                    for (let r = 0; r < Math.min(2, rows.length); r++) {
+                        const row = rows[r].map(c => String(c || '').toLowerCase().trim());
+                        row.forEach((cell, i) => {
+                            if (cell === 'task_code' || cell === 'activity id') codeCol = i;
+                            if (cell === 'task_name' || cell === 'activity name') nameCol = i;
+                            if (cell.includes('start')) startCol = i;
+                            if (cell.includes('finish') || cell === 'end_date') endCol = i;
+                        });
+                    }
+
+                    if (codeCol === -1 || nameCol === -1) {
+                        errEl.innerHTML = '<div class="form-error">Could not detect task_code/Activity ID and task_name/Activity Name columns</div>';
+                        return;
+                    }
+
+                    // Extract data rows (skip first 2 header rows)
+                    const activities = [];
+                    for (let r = 2; r < rows.length; r++) {
+                        const row = rows[r];
+                        if (!row || !row[codeCol]) continue;
+                        const code = String(row[codeCol]).trim();
+                        const name = String(row[nameCol] || '').trim();
+                        const startDate = startCol >= 0 ? parsePrimaveraDate(row[startCol]) : null;
+                        const endDate = endCol >= 0 ? parsePrimaveraDate(row[endCol]) : null;
+                        if (code && name) {
+                            activities.push({ code, name, start_date: startDate, end_date: endDate });
+                        }
+                    }
+
+                    if (activities.length === 0) {
+                        errEl.innerHTML = '<div class="form-error">No valid activities found in file</div>';
+                        return;
+                    }
+
+                    // Group by first letter of task_code
+                    const groups = {};
+                    const groupOrder = [];
+                    activities.forEach(a => {
+                        const letter = a.code.charAt(0).toUpperCase();
+                        if (!groups[letter]) {
+                            groups[letter] = [];
+                            groupOrder.push(letter);
+                        }
+                        groups[letter].push(a);
+                    });
+
+                    // Build phases with smart naming
+                    parsedPhases = groupOrder.map((letter, idx) => {
+                        const tasks = groups[letter];
+                        const phaseName = derivePhaseName(letter, tasks);
+                        const starts = tasks.map(t => t.start_date).filter(Boolean).sort();
+                        const ends = tasks.map(t => t.end_date).filter(Boolean).sort();
+                        return {
+                            name: phaseName,
+                            sort_order: idx,
+                            start_date: starts[0] || null,
+                            end_date: ends[ends.length - 1] || null,
+                            tasks,
+                        };
+                    });
+
+                    // Render preview
+                    const previewEl = body.querySelector('#upload-preview');
+                    let previewMode = 'table';
+
+                    function renderPreview() {
+                        if (previewMode === 'gantt') {
+                            renderGanttPreview(previewEl, parsedPhases, activities.length, () => { previewMode = 'table'; renderPreview(); });
+                        } else {
+                            renderTablePreview(previewEl, parsedPhases, activities.length, () => { previewMode = 'gantt'; renderPreview(); });
+                        }
+                        body.querySelector('#upload-actions').style.display = '';
+                    }
+
+                    function renderTablePreview(el, phases, totalTasks, onToggle) {
+                        el.innerHTML = `
+                            <div class="preview-summary" style="display:flex;justify-content:space-between;align-items:center">
+                                <div>
+                                    <h3>Preview: ${phases.length} phases, ${totalTasks} tasks</h3>
+                                    <p style="color:var(--accent)">Name each phase below, then click "Import Schedule".</p>
+                                </div>
+                                <button class="btn-edit" id="preview-toggle-btn">Gantt View</button>
+                            </div>
+                            <div class="app-table-wrap" style="max-height:340px;overflow:auto">
+                                <table class="app-table">
+                                    <thead><tr>
+                                        <th>Phase Name</th>
+                                        <th>Tasks</th>
+                                        <th>Start</th>
+                                        <th>End</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        ${phases.map(phase => `
+                                            <tr style="background:rgba(233,69,96,0.06)">
+                                                <td>
+                                                    <input type="text" class="phase-name-input" data-sort="${phase.sort_order}" value="${phase.name}" placeholder="Enter phase name..." style="background:rgba(0,0,0,0.4);border:1px solid var(--accent);border-radius:4px;color:var(--text-primary);padding:4px 10px;font-size:13px;font-weight:500;width:100%;font-family:var(--font)">
+                                                </td>
+                                                <td class="strong">${phase.tasks.length}</td>
+                                                <td>${phase.start_date || '—'}</td>
+                                                <td>${phase.end_date || '—'}</td>
+                                            </tr>
+                                            ${phase.tasks.map(t => `
+                                                <tr>
+                                                    <td style="padding-left:28px;color:var(--text-secondary)">${t.code} — ${t.name}</td>
+                                                    <td></td>
+                                                    <td style="color:var(--text-muted)">${t.start_date || '—'}</td>
+                                                    <td style="color:var(--text-muted)">${t.end_date || '—'}</td>
+                                                </tr>
+                                            `).join('')}
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                        el.querySelector('#preview-toggle-btn').addEventListener('click', onToggle);
+                        el.querySelectorAll('.phase-name-input').forEach(input => {
+                            input.addEventListener('input', () => {
+                                const idx = parseInt(input.dataset.sort, 10);
+                                if (parsedPhases[idx]) parsedPhases[idx].name = input.value;
+                            });
+                        });
+                    }
+
+                    function renderGanttPreview(el, phases, totalTasks, onToggle) {
+                        // Collect all dates to determine range
+                        const allDates = [];
+                        phases.forEach(p => {
+                            p.tasks.forEach(t => {
+                                if (t.start_date) allDates.push(new Date(t.start_date));
+                                if (t.end_date) allDates.push(new Date(t.end_date));
+                            });
+                        });
+                        if (allDates.length === 0) { el.innerHTML = '<div class="empty-state">No dates to chart</div>'; return; }
+
+                        const minDate = new Date(Math.min(...allDates));
+                        const maxDate = new Date(Math.max(...allDates));
+                        const totalDays = Math.max(1, Math.ceil((maxDate - minDate) / 86400000) + 1);
+
+                        // Build week markers
+                        const weeks = [];
+                        const wd = new Date(minDate);
+                        wd.setDate(wd.getDate() - wd.getDay() + 1); // start on Monday
+                        while (wd <= maxDate) {
+                            weeks.push(new Date(wd));
+                            wd.setDate(wd.getDate() + 7);
+                        }
+
+                        // Month markers
+                        const months = [];
+                        const md = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+                        while (md <= maxDate) {
+                            const mStart = new Date(Math.max(md, minDate));
+                            const mEnd = new Date(md.getFullYear(), md.getMonth() + 1, 0);
+                            const leftPct = ((mStart - minDate) / 86400000) / totalDays * 100;
+                            const widthPct = (Math.min(mEnd, maxDate) - mStart) / 86400000 / totalDays * 100;
+                            months.push({ label: md.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), leftPct, widthPct });
+                            md.setMonth(md.getMonth() + 1);
+                        }
+
+                        function barStyle(startStr, endStr, color, textColor) {
+                            const s = startStr ? new Date(startStr) : minDate;
+                            const e = endStr ? new Date(endStr) : s;
+                            const left = ((s - minDate) / 86400000) / totalDays * 100;
+                            const width = Math.max(0.5, ((e - s) / 86400000 + 1) / totalDays * 100);
+                            return `left:${left}%;width:${width}%;background:${color};color:${textColor}`;
+                        }
+
+                        // Phase colors
+                        const phaseColors = ['#e94560','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
+
+                        el.innerHTML = `
+                            <div class="preview-summary" style="display:flex;justify-content:space-between;align-items:center">
+                                <div>
+                                    <h3>Gantt Chart: ${phases.length} phases, ${totalTasks} tasks</h3>
+                                    <p style="color:var(--text-muted)">Visual schedule overview. Switch to Table View to rename phases.</p>
+                                </div>
+                                <button class="btn-edit" id="preview-toggle-btn">Table View</button>
+                            </div>
+                            <div style="overflow:auto;max-height:380px;font-size:11px">
+                                <div style="display:flex;position:sticky;top:0;z-index:2;background:var(--window-header);border-bottom:1px solid var(--window-border)">
+                                    <div style="width:220px;flex-shrink:0;padding:4px 8px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;border-right:1px solid var(--window-border)">Activity</div>
+                                    <div style="flex:1;position:relative;min-width:500px">
+                                        <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.06)">
+                                            ${months.map(m => `<div style="position:absolute;left:${m.leftPct}%;width:${m.widthPct}%;text-align:center;padding:2px 0;font-size:10px;font-weight:600;color:var(--text-secondary)">${m.label}</div>`).join('')}
+                                        </div>
+                                        <div style="display:flex;margin-top:16px">
+                                            ${weeks.map(w => {
+                                                const wLeft = Math.max(0, ((w - minDate) / 86400000) / totalDays * 100);
+                                                return `<div style="position:absolute;left:${wLeft}%;font-size:9px;color:var(--text-muted);padding:0 2px">${w.getDate()}</div>`;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="min-height:60px">
+                                    ${phases.map((phase, pi) => {
+                                        const color = phaseColors[pi % phaseColors.length];
+                                        const colorFaded = color + '33';
+                                        return `
+                                            <div style="display:flex;align-items:center;background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.08);min-height:30px">
+                                                <div style="width:220px;flex-shrink:0;padding:4px 8px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--window-border);font-size:11px" title="${phase.name}">${phase.name}</div>
+                                                <div style="flex:1;position:relative;min-width:500px;height:24px">
+                                                    <div class="timeline-bar" style="${barStyle(phase.start_date, phase.end_date, color, '#fff')};height:20px;top:2px;border-radius:3px;font-size:10px;line-height:20px;font-weight:600;opacity:0.9">${phase.tasks.length} tasks</div>
+                                                </div>
+                                            </div>
+                                            ${phase.tasks.map(t => `
+                                                <div style="display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,0.03);min-height:24px">
+                                                    <div style="width:220px;flex-shrink:0;padding:2px 8px 2px 20px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--window-border);font-size:10px" title="${t.code} — ${t.name}">${t.code} ${t.name}</div>
+                                                    <div style="flex:1;position:relative;min-width:500px;height:20px">
+                                                        <div class="timeline-bar" style="${barStyle(t.start_date, t.end_date, colorFaded, color)};height:14px;top:3px;border-radius:2px;font-size:9px;line-height:14px;border:1px solid ${color}40"></div>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        `;
+                                    }).join('')}
+                                </div>
+                                <div style="display:flex;position:sticky;bottom:0;background:var(--window-header);border-top:1px solid var(--window-border);padding:4px 8px">
+                                    <div style="width:220px;flex-shrink:0"></div>
+                                    <div style="flex:1;display:flex;gap:12px;flex-wrap:wrap;padding:2px 0">
+                                        ${phases.map((p, pi) => `<span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-secondary)"><span style="width:10px;height:10px;border-radius:2px;background:${phaseColors[pi % phaseColors.length]};display:inline-block"></span>${p.name}</span>`).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        el.querySelector('#preview-toggle-btn').addEventListener('click', onToggle);
+                    }
+
+                    renderPreview();
+                } catch (err) {
+                    errEl.innerHTML = `<div class="form-error">Parse error: ${err.message}</div>`;
+                }
+            };
+            reader.readAsArrayBuffer(fileInput.files[0]);
+        });
+
+        body.querySelector('#upload-import-btn').addEventListener('click', async () => {
+            if (!parsedPhases) return;
+            const projectId = body.querySelector('#upload-project').value;
+            const btn = body.querySelector('#upload-import-btn');
+            const errEl = body.querySelector('#upload-error');
+            errEl.innerHTML = '';
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+
+            try {
+                // Check for existing phases on this project
+                const { data: existing, error: checkErr } = await SupabaseClient.from('schedule_phases')
+                    .select('id')
+                    .eq('project_id', projectId);
+                console.log('Existing phases for project', projectId, ':', existing?.length || 0, checkErr || 'no error');
+
+                if (existing && existing.length > 0) {
+                    const ok = confirm('This project already has ' + existing.length + ' phase(s). Replace them with the new import?\n\nThis will delete all existing phases and tasks for this project.');
+                    if (!ok) {
+                        btn.disabled = false;
+                        btn.textContent = 'Import Schedule';
+                        return;
+                    }
+                    btn.textContent = 'Removing old schedule...';
+                    // Delete tasks for each existing phase, then delete phases
+                    for (const ep of existing) {
+                        const { error: dtErr } = await SupabaseClient.from('schedule_tasks')
+                            .delete()
+                            .eq('phase_id', ep.id);
+                        if (dtErr) { console.error('Delete tasks error:', dtErr); throw dtErr; }
+                    }
+                    const { error: delPhasesErr } = await SupabaseClient.from('schedule_phases')
+                        .delete()
+                        .eq('project_id', projectId);
+                    if (delPhasesErr) { console.error('Delete phases error:', delPhasesErr); throw delPhasesErr; }
+                }
+
+                btn.textContent = 'Importing...';
+
+                for (const phase of parsedPhases) {
+                    // Insert phase
+                    const { data: phaseData, error: phaseErr } = await SupabaseClient.from('schedule_phases')
+                        .insert({
+                            project_id: projectId,
+                            name: phase.name,
+                            start_date: phase.start_date,
+                            end_date: phase.end_date,
+                            status: 'pending',
+                            sort_order: phase.sort_order,
+                        })
+                        .select()
+                        .single();
+                    if (phaseErr) throw phaseErr;
+
+                    // Insert tasks for this phase
+                    if (phase.tasks.length > 0) {
+                        const taskRecords = phase.tasks.map(t => {
+                            const rec = {
+                                phase_id: phaseData.id,
+                                name: `${t.code} — ${t.name}`,
+                                due_date: t.end_date,
+                                status: 'pending',
+                            };
+                            if (t.start_date) rec.start_date = t.start_date;
+                            return rec;
+                        });
+                        // Try with start_date first, fall back without it if column doesn't exist
+                        let taskRes = await SupabaseClient.from('schedule_tasks').insert(taskRecords);
+                        if (taskRes.error && taskRes.error.message && taskRes.error.message.includes('start_date')) {
+                            const fallbackRecords = taskRecords.map(({ start_date, ...rest }) => rest);
+                            taskRes = await SupabaseClient.from('schedule_tasks').insert(fallbackRecords);
+                        }
+                        if (taskRes.error) throw taskRes.error;
+                    }
+                }
+
+                await loadList(win);
+            } catch (err) {
+                errEl.innerHTML = `<div class="form-error">Import error: ${err.message}</div>`;
+                btn.disabled = false;
+                btn.textContent = 'Import Schedule';
             }
         });
     }
