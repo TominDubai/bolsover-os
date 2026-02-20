@@ -100,11 +100,10 @@ async function syncInvoice(supabase: any, token: string, invoiceId: string) {
   if (invoice.zoho_invoice_id) {
     await zohoAPI(token, "PUT", `/invoices/${invoice.zoho_invoice_id}`, {
       customer_id: contactId,
-      invoice_number: invoice.reference || undefined,
       date: invoiceDate,
       due_date: dueDate,
       line_items: lineItems,
-      notes: `Synced from BolsoverOS`,
+      notes: invoice.reference ? `BolsoverOS Ref: ${invoice.reference}` : `Synced from BolsoverOS`,
     });
 
     await supabase.from("invoices").update({
@@ -115,11 +114,10 @@ async function syncInvoice(supabase: any, token: string, invoiceId: string) {
   } else {
     const data = await zohoAPI(token, "POST", "/invoices", {
       customer_id: contactId,
-      invoice_number: invoice.reference || undefined,
       date: invoiceDate,
       due_date: dueDate,
       line_items: lineItems,
-      notes: `Synced from BolsoverOS`,
+      notes: invoice.reference ? `BolsoverOS Ref: ${invoice.reference}` : `Synced from BolsoverOS`,
     });
 
     const zohoInvoiceId = data.invoice.invoice_id;
