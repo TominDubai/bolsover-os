@@ -666,21 +666,17 @@ const InvoicesApp = (() => {
 
                 await syncProjectFinancials(inv.project_id);
 
-                // Auto-sync payment to Zoho if invoice is already synced
+                // Auto-sync payment to Zoho (non-blocking)
                 if (inv.zoho_invoice_id) {
-                    try {
-                        await callZoho('sync-payment', {
-                            payment: {
-                                invoice_id: inv.id,
-                                amount: payAmount,
-                                payment_date: body.querySelector('#f-pay-date').value || today,
-                                method: body.querySelector('#f-pay-method').value || null,
-                                reference: body.querySelector('#f-pay-ref').value.trim() || null,
-                            }
-                        });
-                    } catch (e) {
-                        console.warn('Zoho payment sync failed:', e.message);
-                    }
+                    callZoho('sync-payment', {
+                        payment: {
+                            invoice_id: inv.id,
+                            amount: payAmount,
+                            payment_date: body.querySelector('#f-pay-date').value || today,
+                            method: body.querySelector('#f-pay-method').value || null,
+                            reference: body.querySelector('#f-pay-ref').value.trim() || null,
+                        }
+                    }).catch(e => console.warn('Zoho payment sync failed:', e.message));
                 }
 
                 await reloadDetail(win, inv.id);

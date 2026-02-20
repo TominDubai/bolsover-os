@@ -104,6 +104,7 @@ async function syncInvoice(supabase: any, token: string, invoiceId: string) {
       due_date: dueDate,
       line_items: lineItems,
       notes: invoice.reference ? `BolsoverOS Ref: ${invoice.reference}` : `Synced from BolsoverOS`,
+      reason: "Updated from BolsoverOS",
     });
 
     await supabase.from("invoices").update({
