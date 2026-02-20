@@ -1356,6 +1356,170 @@ html, body {
     background: var(--accent-hover);
 }
 
+/* ===== Project Hub Cards ===== */
+.hub-cards-section {
+    padding: 0 16px 16px;
+}
+
+.hub-cards-section h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+.hub-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.hub-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: 3px solid var(--hub-accent, var(--text-muted));
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: all var(--transition);
+}
+
+.hub-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    border-left-color: var(--hub-accent, var(--text-muted));
+}
+
+.hub-card--quotes { --hub-accent: #3b82f6; }
+.hub-card--invoices { --hub-accent: #22c55e; }
+.hub-card--variations { --hub-accent: #a855f7; }
+.hub-card--schedule { --hub-accent: #f59e0b; }
+.hub-card--sitework { --hub-accent: #ef4444; }
+
+.hub-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.hub-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--hub-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.hub-card-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.hub-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.hub-card-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.hub-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.hub-metric-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.hub-metric-value.highlight {
+    color: var(--hub-accent);
+}
+
+.hub-metric-value.warning {
+    color: #f59e0b;
+}
+
+.hub-metric-label {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.hub-card-action {
+    align-self: flex-start;
+    padding: 4px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--window-border);
+    border-radius: var(--radius-sm);
+    color: var(--hub-accent);
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.hub-card-action:hover {
+    background: var(--hub-accent);
+    color: #fff;
+    border-color: var(--hub-accent);
+}
+
+.hub-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.hub-progress-fill {
+    height: 100%;
+    background: var(--hub-accent);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.hub-cards-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 8px 0;
+}
+
+@keyframes hub-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+
+.hub-cards-loading::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--text-muted);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: hub-pulse 1s linear infinite;
+}
+
 /* ===== Utility ===== */
 .hidden {
     display: none !important;
