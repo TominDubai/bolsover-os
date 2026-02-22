@@ -6,6 +6,7 @@ const Desktop = (() => {
         EnquiriesApp,
         ProjectsApp,
         QuotesApp,
+        RFQApp,
         InvoicesApp,
         VariationsApp,
         ScheduleApp,

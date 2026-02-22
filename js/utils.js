@@ -161,10 +161,35 @@ const Utils = (() => {
         return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(empty);
     }
 
+    const RFQ_STATUS_LABELS = {
+        draft: 'Draft',
+        sent: 'Sent',
+        received: 'Received',
+        accepted: 'Accepted',
+        rejected: 'Rejected',
+        expired: 'Expired',
+    };
+
+    const RFQ_STATUS_COLORS = {
+        draft:    { bg: '#f3f4f6', text: '#374151' },
+        sent:     { bg: '#dbeafe', text: '#1e40af' },
+        received: { bg: '#fef3c7', text: '#92400e' },
+        accepted: { bg: '#dcfce7', text: '#166534' },
+        rejected: { bg: '#fee2e2', text: '#991b1b' },
+        expired:  { bg: '#f3f4f6', text: '#6b7280' },
+    };
+
+    function rfqStatusBadge(status) {
+        const label = RFQ_STATUS_LABELS[status] || status;
+        const colors = RFQ_STATUS_COLORS[status] || { bg: '#f3f4f6', text: '#374151' };
+        return `<span class="status-badge" style="background:${colors.bg};color:${colors.text}">${label}</span>`;
+    }
+
     return {
         STATUS_LABELS, STATUS_COLORS, HEALTH_ICONS, HEALTH_LABELS,
         PIPELINE_STATUSES, ACTIVE_STATUSES, ENQUIRY_STATUSES, TRADE_COLORS,
+        RFQ_STATUS_LABELS, RFQ_STATUS_COLORS,
         formatCurrency, formatCurrencyShort, formatDate, formatRelativeDate,
-        statusBadge, tradeBadge, healthBadge, ratingStars,
+        statusBadge, tradeBadge, healthBadge, ratingStars, rfqStatusBadge,
     };
 })();

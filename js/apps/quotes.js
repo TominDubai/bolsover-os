@@ -268,6 +268,7 @@ const QuotesApp = (() => {
                             <button id="q-status-go">Update</button>
                         </div>
                         <button class="btn-edit" id="q-edit-btn">Edit Details</button>
+                        <button class="import-btn" id="q-manage-rfqs">Manage RFQs →</button>
                     </div>
 
                     <div class="boq-detail-body">
@@ -383,6 +384,12 @@ const QuotesApp = (() => {
 
             // Edit quote details
             body.querySelector('#q-edit-btn').addEventListener('click', () => showEditQuoteForm(win, quote));
+
+            // Manage RFQs
+            body.querySelector('#q-manage-rfqs').addEventListener('click', () => {
+                sessionStorage.setItem('rfq_boq_id', quote.id);
+                Router.navigate('rfq');
+            });
 
             // Add category
             body.querySelector('#q-add-cat').addEventListener('click', async () => {
