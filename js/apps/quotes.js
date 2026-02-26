@@ -701,7 +701,8 @@ const QuotesApp = (() => {
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                const wb = XLSX.read(e.target.result, { type: 'array' });
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
                 const sheet = wb.Sheets[wb.SheetNames[0]];
                 const raw = XLSX.utils.sheet_to_json(sheet);
 
