@@ -758,9 +758,14 @@ const QuotesApp = (() => {
                         if (!row || !row[descIdx]) return false;
                         const desc = String(row[descIdx]).trim().toLowerCase();
                         if (!desc) return false;
-                        // Skip category headers (e.g. "A. Preliminaries") and sub-total rows
+                        // Skip category headers, sub-total rows, and summary labels
                         if (desc.startsWith('sub-total') || desc.startsWith('subtotal')) return false;
                         if (/^[a-z]\.\s/i.test(desc) && desc.length < 60 && !row[colMap.qty]) return false;
+                        // Skip rows with no qty, no unit, and no cost (summary/label rows)
+                        const hasQty = colMap.qty !== -1 && row[colMap.qty];
+                        const hasUnit = colMap.unit !== -1 && row[colMap.unit];
+                        const hasCost = colMap.uc !== -1 && row[colMap.uc];
+                        if (!hasQty && !hasUnit && !hasCost) return false;
                         return true;
                     })
                     .map(row => {
