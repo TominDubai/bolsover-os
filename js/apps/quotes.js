@@ -163,7 +163,7 @@ const QuotesApp = (() => {
                                 <label>Project *</label>
                                 <select id="f-project">
                                     <option value="">— Select project —</option>
-                                    ${projects.map(p => `<option value="${p.id}">${p.reference || 'Untitled'} — ${p.client?.name || 'No client'}</option>`).join('')}
+                                    ${projects.map(p => `<option value="${p.id}" data-ref="${p.reference || ''}">${p.reference || 'Untitled'} — ${p.client?.name || 'No client'}</option>`).join('')}
                                 </select>
                             </div>
                             <div class="form-group">
@@ -188,6 +188,15 @@ const QuotesApp = (() => {
         const goBack = () => loadList(win);
         body.querySelector('#q-form-back').addEventListener('click', goBack);
         body.querySelector('#q-form-cancel').addEventListener('click', goBack);
+
+        // Auto-fill quote reference from selected project
+        const projectSelect = body.querySelector('#f-project');
+        const refInput = body.querySelector('#f-reference');
+        projectSelect.addEventListener('change', () => {
+            const selected = projectSelect.selectedOptions[0];
+            const projRef = selected ? selected.dataset.ref : '';
+            if (projRef) refInput.value = projRef;
+        });
 
         body.querySelector('#q-form-save').addEventListener('click', async () => {
             const btn = body.querySelector('#q-form-save');
