@@ -216,6 +216,27 @@ const EnquiriesApp = (() => {
         const e = existing || {};
         const today = new Date().toISOString().split('T')[0];
 
+        // Auto-generate reference for new enquiries
+        let autoRef = '';
+        if (!isEdit) {
+            try {
+                const year = new Date().getFullYear();
+                const prefix = `BOL-${year}-`;
+                const { data: latest } = await SupabaseClient.from('projects')
+                    .select('reference')
+                    .like('reference', `${prefix}%`)
+                    .order('reference', { ascending: false })
+                    .limit(1);
+                let nextNum = 1;
+                if (latest && latest.length > 0) {
+                    const lastRef = latest[0].reference;
+                    const lastNum = parseInt(lastRef.replace(prefix, ''), 10);
+                    if (!isNaN(lastNum)) nextNum = lastNum + 1;
+                }
+                autoRef = `${prefix}${String(nextNum).padStart(3, '0')}`;
+            } catch (e) {}
+        }
+
         body.innerHTML = `
             <div class="form-view">
                 <div class="form-header">
@@ -235,7 +256,7 @@ const EnquiriesApp = (() => {
                             </div>
                             <div class="form-group">
                                 <label>Reference</label>
-                                <input type="text" id="f-reference" value="${e.reference || ''}" placeholder="e.g. BOL-2026-001">
+                                <input type="text" id="f-reference" value="${e.reference || autoRef}" placeholder="e.g. BOL-2026-001">
                             </div>
                         </div>
                     </div>
