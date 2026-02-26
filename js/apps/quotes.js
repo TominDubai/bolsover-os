@@ -304,6 +304,8 @@ const QuotesApp = (() => {
                             <div style="display:flex;gap:8px">
                                 <button class="import-btn" id="q-add-cat">+ Category</button>
                                 <button class="import-btn" id="q-add-item">+ Add Item</button>
+                                <button class="import-btn" id="q-upload-boq">📤 Upload BOQ</button>
+                                <input type="file" id="q-boq-file" accept=".xlsx,.xls" style="display:none">
                             </div>
                         </div>
 
@@ -413,6 +415,14 @@ const QuotesApp = (() => {
 
             // Add item
             body.querySelector('#q-add-item').addEventListener('click', () => showItemForm(win, quote, null, cats));
+
+            // Upload BOQ
+            const boqFileInput = body.querySelector('#q-boq-file');
+            body.querySelector('#q-upload-boq').addEventListener('click', () => boqFileInput.click());
+            boqFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) handleBoqUpload(win, quote, file);
+            });
 
             // Edit item buttons
             body.querySelectorAll('.boq-edit-item').forEach(btn => {
@@ -674,6 +684,186 @@ const QuotesApp = (() => {
                 errEl.innerHTML = `<div class="form-error">Error: ${err.message}</div>`;
                 btn.disabled = false;
                 btn.textContent = isEdit ? 'Save Changes' : 'Add Item';
+            }
+        });
+    }
+
+    function handleBoqUpload(win, quote, file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const wb = XLSX.read(e.target.result, { type: 'array' });
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                const raw = XLSX.utils.sheet_to_json(sheet);
+
+                if (!raw.length) {
+                    alert('No data found in the spreadsheet.');
+                    return;
+                }
+
+                // Auto-detect columns by matching headers case-insensitively
+                const headers = Object.keys(raw[0]);
+                const find = (...names) => headers.find(h => names.includes(h.toLowerCase().trim()));
+
+                const descCol = find('description', 'desc', 'item');
+                const qtyCol = find('qty', 'quantity');
+                const unitCol = find('unit', 'uom');
+                const ucCol = find('unit cost', 'unit_cost', 'rate', 'unit price', 'unit_price');
+
+                if (!descCol) {
+                    alert('Could not find a Description column. Expected headers: Description, Desc, or Item.');
+                    return;
+                }
+
+                const margin = quote.margin_percent || 0;
+
+                const parsed = raw
+                    .filter(row => row[descCol] && String(row[descCol]).trim())
+                    .map(row => {
+                        const qty = parseFloat(row[qtyCol]) || 0;
+                        const unitCost = parseFloat(row[ucCol]) || 0;
+                        const cost = qty * unitCost;
+                        const clientUnitPrice = unitCost * (1 + margin / 100);
+                        const price = qty * clientUnitPrice;
+                        return {
+                            description: String(row[descCol]).trim(),
+                            quantity: qty,
+                            unit: row[unitCol] ? String(row[unitCol]).trim() : 'nr',
+                            unit_cost: unitCost,
+                            cost,
+                            markup_percent: margin,
+                            markup_value: price - cost,
+                            client_unit_price: clientUnitPrice,
+                            price,
+                            profit: price - cost,
+                        };
+                    });
+
+                if (!parsed.length) {
+                    alert('No valid rows found (all descriptions were empty).');
+                    return;
+                }
+
+                showBoqPreview(win, quote, parsed);
+            } catch (err) {
+                alert('Error reading Excel file: ' + err.message);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function showBoqPreview(win, quote, parsedItems) {
+        const body = win.querySelector('.app-container');
+        const totalCost = parsedItems.reduce((s, i) => s + i.cost, 0);
+        const totalPrice = parsedItems.reduce((s, i) => s + i.price, 0);
+
+        body.innerHTML = `
+            <div class="detail-view">
+                <div class="detail-header">
+                    <button class="back-btn" id="boq-preview-cancel">← Cancel</button>
+                    <h2>BOQ Upload Preview</h2>
+                </div>
+                <div class="boq-detail-body">
+                    <div class="boq-meta">
+                        <div class="boq-meta-item">
+                            <span class="field-label">Items to Import</span>
+                            <span class="field-value strong">${parsedItems.length}</span>
+                        </div>
+                        <div class="boq-meta-item">
+                            <span class="field-label">Total Cost</span>
+                            <span class="field-value strong">${Utils.formatCurrency(totalCost)}</span>
+                        </div>
+                        <div class="boq-meta-item">
+                            <span class="field-label">Client Price (${quote.margin_percent || 0}% margin)</span>
+                            <span class="field-value strong">${Utils.formatCurrency(totalPrice)}</span>
+                        </div>
+                    </div>
+                    <div class="app-table-wrap">
+                        <table class="app-table">
+                            <thead><tr>
+                                <th>#</th>
+                                <th>Description</th>
+                                <th>Qty</th>
+                                <th>Unit</th>
+                                <th>Unit Cost</th>
+                                <th>Cost</th>
+                                <th>Client Price</th>
+                            </tr></thead>
+                            <tbody>
+                                ${parsedItems.map((item, i) => `
+                                    <tr>
+                                        <td>${i + 1}</td>
+                                        <td>${item.description}</td>
+                                        <td>${item.quantity}</td>
+                                        <td>${item.unit}</td>
+                                        <td>${Utils.formatCurrency(item.unit_cost)}</td>
+                                        <td>${Utils.formatCurrency(item.cost)}</td>
+                                        <td>${Utils.formatCurrency(item.price)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="5" style="text-align:right;font-weight:600">Totals</td>
+                                    <td class="strong">${Utils.formatCurrency(totalCost)}</td>
+                                    <td class="strong">${Utils.formatCurrency(totalPrice)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+                        <button class="back-btn" id="boq-import-cancel">Cancel</button>
+                        <button class="btn-save" id="boq-import-go">Import ${parsedItems.length} Items</button>
+                    </div>
+                    <div id="boq-import-error"></div>
+                </div>
+            </div>
+        `;
+
+        const goBack = async () => {
+            const { data: refreshed } = await SupabaseClient.from('boq')
+                .select('*, project:projects(reference, client:clients(name))')
+                .eq('id', quote.id).single();
+            loadDetail(win, refreshed || quote);
+        };
+
+        body.querySelector('#boq-preview-cancel').addEventListener('click', goBack);
+        body.querySelector('#boq-import-cancel').addEventListener('click', goBack);
+
+        body.querySelector('#boq-import-go').addEventListener('click', async () => {
+            const btn = body.querySelector('#boq-import-go');
+            const errEl = body.querySelector('#boq-import-error');
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+
+            try {
+                const records = parsedItems.map(item => ({
+                    boq_id: quote.id,
+                    description: item.description,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    unit_cost: item.unit_cost,
+                    cost: item.cost,
+                    markup_percent: item.markup_percent,
+                    markup_value: item.markup_value,
+                    client_unit_price: item.client_unit_price,
+                    price: item.price,
+                    profit: item.profit,
+                }));
+
+                const { error } = await SupabaseClient.from('boq_items').insert(records);
+                if (error) throw error;
+
+                await recalcBoqTotals(quote.id);
+
+                const { data: refreshed } = await SupabaseClient.from('boq')
+                    .select('*, project:projects(reference, client:clients(name))')
+                    .eq('id', quote.id).single();
+                loadDetail(win, refreshed || quote);
+            } catch (err) {
+                errEl.innerHTML = `<div class="form-error">Import failed: ${err.message}</div>`;
+                btn.disabled = false;
+                btn.textContent = `Import ${parsedItems.length} Items`;
             }
         });
     }
