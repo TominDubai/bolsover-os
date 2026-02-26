@@ -704,41 +704,59 @@ const QuotesApp = (() => {
                 const data = new Uint8Array(e.target.result);
                 const wb = XLSX.read(data, { type: 'array' });
                 const sheet = wb.Sheets[wb.SheetNames[0]];
-                const raw = XLSX.utils.sheet_to_json(sheet);
+                const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-                if (!raw.length) {
+                if (!allRows.length) {
                     alert('No data found in the spreadsheet.');
                     return;
                 }
 
-                // Auto-detect columns by matching headers case-insensitively
-                const headers = Object.keys(raw[0]);
-                const find = (...names) => headers.find(h => names.includes(h.toLowerCase().trim()));
+                // Scan rows to find the header row containing a description-like column
+                const descNames = ['description', 'desc', 'item'];
+                const qtyNames = ['qty', 'quantity'];
+                const unitNames = ['unit', 'uom'];
+                const ucNames = ['unit cost', 'unit_cost', 'rate', 'unit price', 'unit_price'];
 
-                const descCol = find('description', 'desc', 'item');
-                const qtyCol = find('qty', 'quantity');
-                const unitCol = find('unit', 'uom');
-                const ucCol = find('unit cost', 'unit_cost', 'rate', 'unit price', 'unit_price');
+                let headerIdx = -1;
+                let colMap = {};
+                for (let r = 0; r < Math.min(allRows.length, 20); r++) {
+                    const row = allRows[r];
+                    if (!row || !row.length) continue;
+                    const cells = row.map(c => String(c || '').toLowerCase().trim());
+                    const di = cells.findIndex(c => descNames.includes(c));
+                    if (di !== -1) {
+                        headerIdx = r;
+                        colMap.desc = di;
+                        colMap.qty = cells.findIndex(c => qtyNames.includes(c));
+                        colMap.unit = cells.findIndex(c => unitNames.includes(c));
+                        colMap.uc = cells.findIndex(c => ucNames.includes(c));
+                        break;
+                    }
+                }
 
-                if (!descCol) {
-                    alert('Could not find a Description column. Expected headers: Description, Desc, or Item.');
+                if (headerIdx === -1) {
+                    const sampleHeaders = allRows.slice(0, 5).map((r, i) => `Row ${i + 1}: ${(r || []).join(', ')}`).join('\n');
+                    alert('Could not find a Description column. Expected headers: Description, Desc, or Item.\n\nFirst rows:\n' + sampleHeaders);
                     return;
                 }
 
+                const dataRows = allRows.slice(headerIdx + 1);
+
                 const margin = quote.margin_percent || 0;
 
-                const parsed = raw
-                    .filter(row => row[descCol] && String(row[descCol]).trim())
+                const parsed = dataRows
+                    .filter(row => row && row[colMap.desc] && String(row[colMap.desc]).trim())
                     .map(row => {
-                        const qty = parseFloat(row[qtyCol]) || 0;
-                        const unitCost = parseFloat(row[ucCol]) || 0;
+                        const qty = colMap.qty !== -1 ? (parseFloat(row[colMap.qty]) || 0) : 0;
+                        const unitCost = colMap.uc !== -1 ? (parseFloat(row[colMap.uc]) || 0) : 0;
+                        const unit = colMap.unit !== -1 && row[colMap.unit] ? String(row[colMap.unit]).trim() : 'nr';
                         const cost = qty * unitCost;
                         const clientUnitPrice = unitCost * (1 + margin / 100);
                         const price = qty * clientUnitPrice;
                         return {
-                            description: String(row[descCol]).trim(),
+                            description: String(row[colMap.desc]).trim(),
                             quantity: qty,
-                            unit: row[unitCol] ? String(row[unitCol]).trim() : 'nr',
+                            unit,
                             unit_cost: unitCost,
                             cost,
                             markup_percent: margin,
