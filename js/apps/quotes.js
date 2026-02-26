@@ -764,8 +764,8 @@ const QuotesApp = (() => {
                         return true;
                     })
                     .map(row => {
-                        const qty = colMap.qty !== -1 ? (parseFloat(row[colMap.qty]) || 0) : 0;
-                        const unitCost = colMap.uc !== -1 ? (parseFloat(row[colMap.uc]) || 0) : 0;
+                        const qty = colMap.qty !== -1 ? Math.round((parseFloat(row[colMap.qty]) || 0) * 100) / 100 : 0;
+                        const unitCost = colMap.uc !== -1 ? Math.round((parseFloat(row[colMap.uc]) || 0) * 100) / 100 : 0;
                         const unit = colMap.unit !== -1 && row[colMap.unit] ? String(row[colMap.unit]).trim() : 'nr';
                         const cost = qty * unitCost;
                         const clientUnitPrice = unitCost * (1 + margin / 100);
