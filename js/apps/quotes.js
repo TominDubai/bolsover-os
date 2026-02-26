@@ -711,41 +711,58 @@ const QuotesApp = (() => {
                     return;
                 }
 
-                // Scan rows to find the header row containing a description-like column
-                const descNames = ['description', 'desc', 'item'];
-                const qtyNames = ['qty', 'quantity'];
-                const unitNames = ['unit', 'uom'];
-                const ucNames = ['unit cost', 'unit_cost', 'rate', 'unit price', 'unit_price'];
+                // Scan rows to find the header row containing known column names
+                const descMatches = ['work description', 'description', 'desc', 'item'];
+                const qtyMatches = ['qty', 'quantity'];
+                const unitMatches = ['unit', 'uom'];
+                const ucMatches = ['unit cost', 'unit_cost', 'rate', 'unit price', 'unit_price', 'price vat inc.', 'price vat inc', 'price'];
 
                 let headerIdx = -1;
                 let colMap = {};
-                for (let r = 0; r < Math.min(allRows.length, 20); r++) {
+                for (let r = 0; r < Math.min(allRows.length, 40); r++) {
                     const row = allRows[r];
                     if (!row || !row.length) continue;
                     const cells = row.map(c => String(c || '').toLowerCase().trim());
-                    const di = cells.findIndex(c => descNames.includes(c));
+                    const di = cells.findIndex(c => descMatches.includes(c));
                     if (di !== -1) {
                         headerIdx = r;
                         colMap.desc = di;
-                        colMap.qty = cells.findIndex(c => qtyNames.includes(c));
-                        colMap.unit = cells.findIndex(c => unitNames.includes(c));
-                        colMap.uc = cells.findIndex(c => ucNames.includes(c));
+                        colMap.qty = cells.findIndex(c => qtyMatches.includes(c));
+                        colMap.unit = cells.findIndex(c => unitMatches.includes(c));
+                        colMap.uc = cells.findIndex(c => ucMatches.includes(c));
                         break;
                     }
                 }
 
                 if (headerIdx === -1) {
-                    const sampleHeaders = allRows.slice(0, 5).map((r, i) => `Row ${i + 1}: ${(r || []).join(', ')}`).join('\n');
-                    alert('Could not find a Description column. Expected headers: Description, Desc, or Item.\n\nFirst rows:\n' + sampleHeaders);
+                    const sampleHeaders = allRows.slice(0, 10).map((r, i) => `Row ${i + 1}: ${(r || []).join(', ')}`).join('\n');
+                    alert('Could not find a Description column. Expected headers: Work Description, Description, Desc, or Item.\n\nFirst rows:\n' + sampleHeaders);
                     return;
                 }
 
                 const dataRows = allRows.slice(headerIdx + 1);
-
                 const margin = quote.margin_percent || 0;
 
+                // In Bolsover BOQs, the description is often in col 2 (col 0 has item numbers).
+                // Detect: if header col is 0 but data rows have descriptions in col 2, use col 2.
+                let descIdx = colMap.desc;
+                if (descIdx === 0 && dataRows.length > 0) {
+                    const sample = dataRows.slice(0, 10).filter(r => r && r.length > 2);
+                    const col2HasText = sample.filter(r => r[2] && String(r[2]).trim().length > 10).length;
+                    const col0IsRef = sample.filter(r => r[0] && /^[A-Z]\d|^\d+$/.test(String(r[0]).trim())).length;
+                    if (col2HasText >= 3 && col0IsRef >= 2) descIdx = 2;
+                }
+
                 const parsed = dataRows
-                    .filter(row => row && row[colMap.desc] && String(row[colMap.desc]).trim())
+                    .filter(row => {
+                        if (!row || !row[descIdx]) return false;
+                        const desc = String(row[descIdx]).trim().toLowerCase();
+                        if (!desc) return false;
+                        // Skip category headers (e.g. "A. Preliminaries") and sub-total rows
+                        if (desc.startsWith('sub-total') || desc.startsWith('subtotal')) return false;
+                        if (/^[a-z]\.\s/i.test(desc) && desc.length < 60 && !row[colMap.qty]) return false;
+                        return true;
+                    })
                     .map(row => {
                         const qty = colMap.qty !== -1 ? (parseFloat(row[colMap.qty]) || 0) : 0;
                         const unitCost = colMap.uc !== -1 ? (parseFloat(row[colMap.uc]) || 0) : 0;
@@ -754,7 +771,7 @@ const QuotesApp = (() => {
                         const clientUnitPrice = unitCost * (1 + margin / 100);
                         const price = qty * clientUnitPrice;
                         return {
-                            description: String(row[colMap.desc]).trim(),
+                            description: String(row[descIdx]).trim(),
                             quantity: qty,
                             unit,
                             unit_cost: unitCost,
